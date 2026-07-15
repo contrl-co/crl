@@ -73,6 +73,7 @@ SBOMs, and keyless cosign signatures — verify before trusting; see
 |---|---|
 | [spec/](spec/README.md) | The CRL v1 language specification — syntax, semantics, canonical form, editions |
 | [docs/crlc.md](docs/crlc.md) | CLI reference and the Go embedding API |
+| [docs/authoring-patterns.md](docs/authoring-patterns.md) | Common bundle shapes and when to use each |
 | [docs/diagnostics.md](docs/diagnostics.md) | The `CRL###` lint diagnostic catalog |
 | [examples/](examples/README.md) | Runnable examples covering every language feature |
 | [editors/vscode/](editors/vscode/README.md) | VS Code extension: highlighting, snippets, live diagnostics |
