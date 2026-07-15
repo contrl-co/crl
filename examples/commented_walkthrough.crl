@@ -1,0 +1,26 @@
+# A line-by-line tour of a CRL rule. Comments start with `#` and run
+# to the end of the line; they never affect the compiled bundle or its
+# hash.
+
+crl v1                       # the edition this source is written for
+package examples.walkthrough # namespace for hand-authored bundles
+bundle walkthrough.demo      # name compiled lineage can be read from
+
+rule demo_gate               # a rule authorizes exactly one target
+	target demo.gate         # ...this one
+
+	# A collector names an evidence source: who provides it, over what
+	# kind of connection, and from where.
+	collector registry_feed registry api from /bundles/demo.json schema demo_v1
+		# Signals are the typed facts a collector yields. Every signal
+		# declares how long its evidence stays provable: after 30 days
+		# without re-observation this fact reads as EXPIRED, never as
+		# silently true.
+		signal record_current bool from record.current ttl 30d
+		signal record_count number from record.count optional ttl 30d
+
+	# Predicates. `need` proves a condition, `block` vetoes on an
+	# active flag, `quorum` requires source presence.
+	need record_current == true
+	need record_count >= 1
+	quorum registry_feed

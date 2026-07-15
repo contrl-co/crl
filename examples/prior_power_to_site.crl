@@ -1,0 +1,21 @@
+crl v1
+package examples.utility
+
+bundle buildability.power {
+    rule power_to_site {
+        target utility.power
+        collector utility_record utility file_upload from /bundles/power.json schema utility_power_v1 {
+            signal power_built bool from power.built ttl 10y
+            signal capacity_kw number from power.capacity_kw unit kw ttl 10y
+            signal confirmed_at time from power.confirmed_at ttl 10y
+            signal construction_start time from project.construction_start optional ttl 30d
+            signal grid_hold bool from power.grid_hold ttl 30d
+        }
+        need power_built == true
+        need capacity_kw >= 2000
+        need confirmed_at within 10y before construction_start
+        need confirmed_at age <= 10y
+        block grid_hold
+        quorum utility_record
+    }
+}
