@@ -1,0 +1,110 @@
+{
+  "name": "crl-language-support",
+  "displayName": "CRL (CONTRL Rule Language)",
+  "description": "Syntax highlighting, snippets, editor configuration, and compiler-backed diagnostics for CRL.",
+  "version": "0.1.0",
+  "publisher": "contrl",
+  "main": "./extension.js",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:crl",
+    "onCommand:crl.lintDocument"
+  ],
+  "scripts": {
+    "check": "node --check extension.js && node scripts/check-assets.js"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "crl",
+        "aliases": [
+          "CRL",
+          "CONTRL Rule Language"
+        ],
+        "extensions": [
+          ".crl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "crl",
+        "scopeName": "source.crl",
+        "path": "./syntaxes/crl.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "crl",
+        "path": "./snippets/crl.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "crl.lintDocument",
+        "title": "CRL: Lint Document"
+      }
+    ],
+    "configuration": {
+      "title": "CRL",
+      "properties": {
+        "crl.lint.command": {
+          "type": "string",
+          "default": "auto",
+          "description": "CRL linter executable. Use auto to run crlc from PATH (or the in-tree compiler when the CRL toolchain repository itself is open). The extension appends: lint -format json -fail-on none."
+        },
+        "crl.lint.args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments passed before the extension's required lint arguments. Use this when crl.lint.command points at a wrapper such as go."
+        },
+        "crl.lint.run": {
+          "type": "string",
+          "default": "onType",
+          "enum": [
+            "onType",
+            "onSave",
+            "off"
+          ],
+          "description": "Controls when CRL diagnostics are refreshed."
+        },
+        "crl.lint.delayMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Debounce delay for on-type CRL diagnostics."
+        },
+        "crl.lint.trace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write CRL linter command details to the CRL output channel."
+        }
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/contrl-group/crl.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://gitlab.com/contrl-group/crl/-/issues"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "crl",
+    "contrl",
+    "rules",
+    "authorization",
+    "linter"
+  ]
+}

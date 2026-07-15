@@ -1,0 +1,167 @@
+{
+  "CRL Version": {
+    "prefix": "crl",
+    "body": [
+      "crl v1"
+    ],
+    "description": "Declare the CRL language version."
+  },
+  "Package": {
+    "prefix": "package",
+    "body": [
+      "package ${1:examples.namespace}"
+    ],
+    "description": "Declare a CRL package namespace."
+  },
+  "Bundle Block": {
+    "prefix": "bundle",
+    "body": [
+      "bundle ${1:package.bundle} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare a named bundle block."
+  },
+  "Rule Block": {
+    "prefix": "rule",
+    "body": [
+      "rule ${1:rule_name} {",
+      "    target ${2:aspect.name}",
+      "    collector ${3:collector_name} ${4:provider_type} ${5:file_upload} from ${6:/bundles/evidence.json} {",
+      "        signal ${7:signal_name} ${8|number,bool,string,time|} from ${9:payload.field} ttl ${10:30d}",
+      "    }",
+      "    need ${7:signal_name} == ${11:true}",
+      "    quorum ${3:collector_name}",
+      "}"
+    ],
+    "description": "Declare a concrete authorization rule."
+  },
+  "Buildability Bundle": {
+    "prefix": "bundle-buildability",
+    "body": [
+      "crl v1",
+      "package ${1:examples.utility}",
+      "",
+      "bundle ${2:buildability.power} {",
+      "    rule ${3:power_to_site} {",
+      "        target ${4:utility.power}",
+      "        collector ${5:utility_record} ${6:utility} ${7:file_upload} from ${8:/bundles/power.json} schema ${9:utility_power_v1} {",
+      "            signal ${10:power_built} bool from ${11:power.built} ttl ${12:10y}",
+      "            signal ${13:capacity_kw} number from ${14:power.capacity_kw} unit ${15:kw} ttl ${16:10y}",
+      "            signal ${17:confirmed_at} time from ${18:power.confirmed_at} ttl ${19:10y}",
+      "        }",
+      "        need ${10:power_built} == true",
+      "        need ${13:capacity_kw} >= ${20:2000}",
+      "        need ${17:confirmed_at} age <= ${21:10y}",
+      "        quorum ${5:utility_record}",
+      "    }",
+      "}"
+    ],
+    "description": "Declare a project buildability rule bundle."
+  },
+  "Constructor": {
+    "prefix": "constructor",
+    "body": [
+      "constructor ${1:constructor_name} {",
+      "    collector ${2:collector_name} ${3:provider_type} ${4:file_upload} from ${5:/bundles/evidence.json} {",
+      "        signal ${6:signal_name} ${7|number,bool,string,time|} from ${8:payload.field} ttl ${9:30d}",
+      "    }",
+      "    need ${6:signal_name} == ${10:true}",
+      "    quorum ${2:collector_name}",
+      "}"
+    ],
+    "description": "Declare reusable collector and predicate structure."
+  },
+  "Abstract Rule": {
+    "prefix": "abstract",
+    "body": [
+      "abstract rule ${1:abstract_rule_name} extends ${2:constructor_name} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare reusable rule structure."
+  },
+  "Collector With Schema": {
+    "prefix": "collector",
+    "body": [
+      "collector ${1:collector_name} ${2:provider_type} ${3:file_upload} from ${4:/bundles/evidence.json} schema ${5:schema_v1} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Declare an evidence collector with a schema identifier."
+  },
+  "Number Signal": {
+    "prefix": "signal-number",
+    "body": [
+      "signal ${1:capacity_kw} number from ${2:power.capacity_kw} unit ${3:kw} ttl ${4:10y}"
+    ],
+    "description": "Declare a numeric signal with a unit."
+  },
+  "Bool Signal": {
+    "prefix": "signal-bool",
+    "body": [
+      "signal ${1:application_complete} bool from ${2:application.complete} ttl ${3:30d}"
+    ],
+    "description": "Declare a boolean signal."
+  },
+  "String Signal": {
+    "prefix": "signal-string",
+    "body": [
+      "signal ${1:credential_reference} string from ${2:credential.reference} ttl ${3:30d}"
+    ],
+    "description": "Declare a string signal."
+  },
+  "Time Signal": {
+    "prefix": "signal-time",
+    "body": [
+      "signal ${1:confirmed_at} time from ${2:power.confirmed_at} ttl ${3:10y}"
+    ],
+    "description": "Declare a temporal signal."
+  },
+  "Temporal Need": {
+    "prefix": "need-within",
+    "body": [
+      "need ${1:confirmed_at} within ${2:10y} before ${3:construction_start}"
+    ],
+    "description": "Declare a temporal proof obligation."
+  },
+  "Block Predicate": {
+    "prefix": "block",
+    "body": [
+      "block ${1:active_hold}"
+    ],
+    "description": "Declare a fail-closed blocker."
+  },
+  "Cluster": {
+    "prefix": "cluster",
+    "body": [
+      "cluster ${1:buildable_scope} {",
+      "    rules ${2:power_to_site} + ${3:permit_clearance}",
+      "    quorum ${2:power_to_site} & ${3:permit_clearance}",
+      "}"
+    ],
+    "description": "Declare a cluster over concrete rule results."
+  },
+  "Count Quorum": {
+    "prefix": "quorum-count",
+    "body": [
+      "quorum count(${1:collector_a}, ${2:collector_b}) >= ${3:1}"
+    ],
+    "description": "Declare count quorum."
+  },
+  "Global Final Policy": {
+    "prefix": "global-policy",
+    "body": [
+      "need ${1:cluster_or_rule_name} == true",
+      "quorum ${1:cluster_or_rule_name}"
+    ],
+    "description": "Declare bundle-level final policy predicates."
+  },
+  "N of M Quorum": {
+    "prefix": "quorumofm",
+    "body": [
+      "quorum ${1:2} of ${2:3} ${3:subject_a} ${4:subject_b} ${5:subject_c}"
+    ],
+    "description": "Require n of the m listed subjects (sugar for count(...) >= n)."
+  }
+}
