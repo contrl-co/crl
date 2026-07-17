@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -140,7 +141,11 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		if err := validateOperator(predicate.Operator); err != nil {
 			return Predicate{}, err
 		}
-		predicate.Value = normalizeValue(predicate.Value)
+		normalizedValue, err := normalizeValue(predicate.Value)
+		if err != nil {
+			return Predicate{}, err
+		}
+		predicate.Value = normalizedValue
 		if err := validateValue(predicate.Value); err != nil {
 			return Predicate{}, err
 		}
@@ -220,7 +225,11 @@ func normalizeCollector(collector Collector) (Collector, error) {
 	if !identifierPattern.MatchString(collector.ConnectorKind) {
 		return Collector{}, fmt.Errorf("%w: invalid connector kind %q", ErrInvalidSyntax, collector.ConnectorKind)
 	}
-	collector.Source = normalizeText(collector.Source)
+	source, err := normalizeText(collector.Source)
+	if err != nil {
+		return Collector{}, err
+	}
+	collector.Source = source
 	if collector.Source == "" {
 		return Collector{}, fmt.Errorf("%w: invalid collector source %q", ErrInvalidSyntax, collector.Source)
 	}
@@ -254,7 +263,11 @@ func normalizeSignal(signal Signal) (Signal, error) {
 	default:
 		return Signal{}, fmt.Errorf("%w: invalid signal kind %q", ErrInvalidSyntax, signal.Kind)
 	}
-	signal.SourceField = normalizeText(signal.SourceField)
+	sourceField, err := normalizeText(signal.SourceField)
+	if err != nil {
+		return Signal{}, err
+	}
+	signal.SourceField = sourceField
 	if signal.SourceField == "" {
 		return Signal{}, fmt.Errorf("%w: invalid signal source field %q", ErrInvalidSyntax, signal.SourceField)
 	}
@@ -1205,16 +1218,25 @@ func normalizeIdentifier(value string) string {
 }
 
 // NFC lives here, not in crypto.CanonicalJSON: the hash must cover the
-// same bytes the evaluator compares.
-func normalizeText(value string) string {
-	return norm.NFC.String(strings.TrimSpace(value))
+// same bytes the evaluator compares. Invalid UTF-8 is rejected because
+// json.Marshal folds it to U+FFFD inside the hash while the evaluator keeps
+// the raw bytes, so two distinct programs would otherwise share a hash.
+func normalizeText(value string) (string, error) {
+	value = norm.NFC.String(strings.TrimSpace(value))
+	if !utf8.ValidString(value) {
+		return "", fmt.Errorf("%w: invalid UTF-8", ErrInvalidSyntax)
+	}
+	return value, nil
 }
 
-func normalizeValue(value Value) Value {
+func normalizeValue(value Value) (Value, error) {
 	if value.Kind == "string" {
 		value.String = norm.NFC.String(value.String)
+		if !utf8.ValidString(value.String) {
+			return Value{}, fmt.Errorf("%w: invalid UTF-8 in string value", ErrInvalidSyntax)
+		}
 	}
-	return value
+	return value, nil
 }
 
 func unquote(raw string) string {
