@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -138,6 +140,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		if err := validateOperator(predicate.Operator); err != nil {
 			return Predicate{}, err
 		}
+		predicate.Value = normalizeValue(predicate.Value)
 		if err := validateValue(predicate.Value); err != nil {
 			return Predicate{}, err
 		}
@@ -217,7 +220,7 @@ func normalizeCollector(collector Collector) (Collector, error) {
 	if !identifierPattern.MatchString(collector.ConnectorKind) {
 		return Collector{}, fmt.Errorf("%w: invalid connector kind %q", ErrInvalidSyntax, collector.ConnectorKind)
 	}
-	collector.Source = strings.TrimSpace(collector.Source)
+	collector.Source = normalizeText(collector.Source)
 	if collector.Source == "" {
 		return Collector{}, fmt.Errorf("%w: invalid collector source %q", ErrInvalidSyntax, collector.Source)
 	}
@@ -251,7 +254,7 @@ func normalizeSignal(signal Signal) (Signal, error) {
 	default:
 		return Signal{}, fmt.Errorf("%w: invalid signal kind %q", ErrInvalidSyntax, signal.Kind)
 	}
-	signal.SourceField = strings.TrimSpace(signal.SourceField)
+	signal.SourceField = normalizeText(signal.SourceField)
 	if signal.SourceField == "" {
 		return Signal{}, fmt.Errorf("%w: invalid signal source field %q", ErrInvalidSyntax, signal.SourceField)
 	}
@@ -1198,7 +1201,20 @@ func RenderQuorumExpression(expression *QuorumExpression) string {
 }
 
 func normalizeIdentifier(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	return strings.ToLower(strings.TrimSpace(norm.NFC.String(value)))
+}
+
+// NFC lives here, not in crypto.CanonicalJSON: the hash must cover the
+// same bytes the evaluator compares.
+func normalizeText(value string) string {
+	return norm.NFC.String(strings.TrimSpace(value))
+}
+
+func normalizeValue(value Value) Value {
+	if value.Kind == "string" {
+		value.String = norm.NFC.String(value.String)
+	}
+	return value
 }
 
 func unquote(raw string) string {
