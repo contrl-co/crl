@@ -108,3 +108,56 @@ func TestCanonicalFormFoldsToNFC(t *testing.T) {
 		t.Error("canonical text carries the decomposed form: the fold is NFD, not NFC")
 	}
 }
+
+// json.Marshal folds invalid UTF-8 to U+FFFD inside the hash while the
+// evaluator keeps the raw bytes, so a raw 0xff literal and a real U+FFFD
+// literal shared a hash and split the verdict. The raw form must not compile.
+func TestInvalidUTF8LiteralIsRejected(t *testing.T) {
+	build := func(literal string) (CompiledBundle, error) {
+		return CompileBundleProgram(Bundle{
+			Version: "crl/v1", Package: "t", Name: "t.f",
+			Rules: []Rule{{
+				Name: "r", Target: "t.x",
+				Collectors: []Collector{{
+					Name: "c", ProviderType: "municipality", ConnectorKind: "file_upload",
+					Source: "/f.json",
+					Signals: []Signal{{
+						Name: "region", Kind: "string", SourceField: "f.region",
+						Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000},
+					}},
+				}},
+				Predicates: []Predicate{{Kind: "need", Field: "region", Operator: "==",
+					Value: Value{Kind: "string", String: literal}}},
+			}},
+		})
+	}
+	if _, err := build("\xff"); err == nil {
+		t.Fatal("a raw invalid-UTF-8 literal compiled; the U+FFFD collision is open")
+	}
+	if _, err := build("�"); err != nil {
+		t.Fatalf("a real U+FFFD literal must still compile: %v", err)
+	}
+}
+
+// A collector source is free text on the hash path, same risk.
+func TestInvalidUTF8CollectorSourceIsRejected(t *testing.T) {
+	_, err := CompileBundleProgram(Bundle{
+		Version: "crl/v1", Package: "t", Name: "t.f",
+		Rules: []Rule{{
+			Name: "r", Target: "t.x",
+			Collectors: []Collector{{
+				Name: "c", ProviderType: "municipality", ConnectorKind: "file_upload",
+				Source: "/f\xff.json",
+				Signals: []Signal{{
+					Name: "ok", Kind: "bool", SourceField: "f.ok",
+					Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000},
+				}},
+			}},
+			Predicates: []Predicate{{Kind: "need", Field: "ok", Operator: "==",
+				Value: Value{Kind: "bool", Bool: true}}},
+		}},
+	})
+	if err == nil {
+		t.Fatal("a raw invalid-UTF-8 collector source compiled")
+	}
+}
