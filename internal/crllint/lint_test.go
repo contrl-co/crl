@@ -310,3 +310,15 @@ func TestLintFlagsUnreferencedSignal(t *testing.T) {
 		t.Fatalf("expected CRL209 for the unreferenced signal, got %#v", report.Diagnostics)
 	}
 }
+
+// CRL210: an unindented predicate after a rule body is silently scoped into
+// the rule by the carve-out; the author may have meant a global final policy.
+func TestLintFlagsCarvedOutGlobalPredicate(t *testing.T) {
+	src := "crl v1\npackage p.q\nbundle b.c\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector c m file_upload from /f\n\t\tsignal a bool from f.a ttl 30d\n" +
+		"\tneed a == true\nneed a == true\n"
+	report := LintSource("t.crl", src, Options{})
+	if !hasDiagnostic(report, "CRL210", SeverityWarning) {
+		t.Fatalf("expected CRL210 for the carved-out predicate, got %#v", report.Diagnostics)
+	}
+}
