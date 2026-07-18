@@ -197,6 +197,12 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		sort.Strings(providers)
 		predicate.Providers = providers
 		predicate.Expression, predicate.Temporal = nil, nil
+		// Upper-bound the threshold. `count(a,b,c) >= N` with N above the
+		// provider count can never be met; the `N of M` sugar rejects this,
+		// and both spellings compile to the same bundle, so this must too.
+		if predicate.Value.Number > float64(len(providers)) {
+			return Predicate{}, fmt.Errorf("%w: quorum threshold %d out of range 1..%d", ErrInvalidSyntax, int(predicate.Value.Number), len(providers))
+		}
 	case PredicateTemporal:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
