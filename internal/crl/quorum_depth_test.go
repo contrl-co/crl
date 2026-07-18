@@ -38,3 +38,20 @@ func TestQuorumExpressionFlatChainIsBounded(t *testing.T) {
 		t.Fatal("a pathologically wide flat quorum chain compiled; the size cap is gone")
 	}
 }
+
+// A caller-built quorum tree via the struct API bypasses the text parser's
+// token cap; normalizeQuorumExpression must bound its own recursion.
+func TestStructBuiltQuorumTreeIsBounded(t *testing.T) {
+	expr := &QuorumExpression{Kind: "subject", Name: "a"}
+	for i := 0; i < 100000; i++ {
+		expr = &QuorumExpression{Kind: "and", Left: expr, Right: &QuorumExpression{Kind: "subject", Name: "a"}}
+	}
+	_, err := CompileBundleProgram(Bundle{Version: "crl/v1", Package: "t", Name: "t.d",
+		Rules: []Rule{{Name: "r", Target: "t.x",
+			Collectors: []Collector{{Name: "c", ProviderType: "m", ConnectorKind: "file_upload", Source: "/f",
+				Signals: []Signal{{Name: "a", Kind: "bool", SourceField: "f.a", Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000}}}}},
+			Predicates: []Predicate{{Kind: "quorum", Expression: expr}}}}})
+	if err == nil {
+		t.Fatal("a struct-built deep quorum tree compiled; the recursion is unbounded")
+	}
+}
