@@ -517,6 +517,12 @@ func canonicalBundleText(bundle Bundle) string {
 	if bundle.Name != "" {
 		fmt.Fprintf(&b, "bundle %s\n", bundle.Name)
 	}
+	// Global predicates render BEFORE the rules. Emitted after them they land
+	// at column 0 following a rule body, where the rule-body carve-out absorbs
+	// them into that rule and the text no longer re-compiles to itself.
+	for _, predicate := range bundle.Predicates {
+		writePredicate(&b, "", predicate)
+	}
 	for _, rule := range bundle.Rules {
 		fmt.Fprintf(&b, "\nrule %s\n", rule.Name)
 		fmt.Fprintf(&b, "\ttarget %s\n", rule.Target)
@@ -547,12 +553,6 @@ func canonicalBundleText(bundle Bundle) string {
 		for _, predicate := range cluster.Predicates {
 			writePredicate(&b, "\t", predicate)
 		}
-	}
-	if len(bundle.Predicates) > 0 {
-		b.WriteByte('\n')
-	}
-	for _, predicate := range bundle.Predicates {
-		writePredicate(&b, "", predicate)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
