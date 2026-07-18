@@ -490,3 +490,25 @@ func TestFutureObservationFailsClosed(t *testing.T) {
 		t.Fatalf("a present fresh observation should authorize, got %s", fresh.Result)
 	}
 }
+
+// A cluster whose member rule is BLOCKED reported a generic DENIED because the
+// member's reason was never in scope for the cluster's result. It must surface
+// the member's outcome.
+func TestClusterReportsBlockedMemberOutcome(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\nneed cl == true\n\n" +
+		"rule ra\n\ttarget a.a\n\tcollector c1 org api from /x.json\n\t\tsignal hold bool from x.y ttl 30d\n\tblock hold\n" +
+		"rule rb\n\ttarget a.b\n\tcollector c2 org api from /y.json\n\t\tsignal s2 bool from y.z ttl 30d\n\tneed s2 == true\n" +
+		"cluster cl\n\trules ra + rb\n\tneed rb == true\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	obs := "2026-06-01T09:00:00Z"
+	result := EvaluateBundleAt(compiled, Facts{
+		"hold": true, "observed_at.hold": obs, "s2": true, "observed_at.s2": obs,
+	}, now)
+	if result.Result != "BLOCKED" {
+		t.Fatalf("cluster with a blocked member: want BLOCKED, got %s", result.Result)
+	}
+}

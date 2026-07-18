@@ -420,12 +420,41 @@ func evaluateBundleCluster(cluster Cluster, facts Facts, signals map[string]Sign
 		}
 		checks = append(checks, check)
 	}
+	result := bundleResult(authorized, checks)
+	if !authorized {
+		// The cluster's own predicate checks may not name why an unauthorized
+		// member failed. Surface the most severe member result so the cluster
+		// does not report a generic DENIED over a BLOCKED or EXPIRED member.
+		for _, member := range members {
+			if !member.Authorized && resultSeverity(member.Result) > resultSeverity(result) {
+				result = member.Result
+			}
+		}
+	}
 	return ClusterTrace{
 		ClusterName: cluster.Name,
-		Result:      bundleResult(authorized, checks),
+		Result:      result,
 		Authorized:  authorized,
 		Members:     members,
 		Checks:      checks,
+	}
+}
+
+// resultSeverity ranks outcomes so the most specific failure wins, matching
+// the precedence in bundleResult (EXPIRED > BLOCKED > INSUFFICIENT_EVIDENCE >
+// DENIED).
+func resultSeverity(result string) int {
+	switch result {
+	case "EXPIRED":
+		return 4
+	case "BLOCKED":
+		return 3
+	case "INSUFFICIENT_EVIDENCE":
+		return 2
+	case "DENIED":
+		return 1
+	default:
+		return 0
 	}
 }
 
