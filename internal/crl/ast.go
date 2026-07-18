@@ -141,11 +141,17 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				if len(fields) != 2 {
 					return Document{}, fmt.Errorf("%w at line %d: package must look like package <name>", ErrInvalidSyntax, statement.Line)
 				}
+				if document.Package != "" {
+					return Document{}, fmt.Errorf("%w at line %d: duplicate package statement", ErrInvalidSyntax, statement.Line)
+				}
 				document.Package = fields[1]
 				continue
 			case "bundle":
 				if len(fields) != 2 {
 					return Document{}, fmt.Errorf("%w at line %d: bundle must look like bundle <name>", ErrInvalidSyntax, statement.Line)
+				}
+				if document.Name != "" {
+					return Document{}, fmt.Errorf("%w at line %d: duplicate bundle statement", ErrInvalidSyntax, statement.Line)
 				}
 				document.Name = fields[1]
 				if statement.OpensBlock() {
@@ -237,6 +243,9 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 			case "target":
 				if len(fields) != 2 {
 					return Document{}, fmt.Errorf("%w at line %d: target must look like target <aspect>", ErrInvalidSyntax, statement.Line)
+				}
+				if currentRule.Target != "" {
+					return Document{}, fmt.Errorf("%w at line %d: duplicate target statement", ErrInvalidSyntax, statement.Line)
 				}
 				currentRule.Target = fields[1]
 			case "collector":
