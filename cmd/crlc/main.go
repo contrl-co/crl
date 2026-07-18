@@ -37,7 +37,33 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
+// errorTrackingWriter latches the first write error so a failed stdout write
+// (broken pipe, full disk) can be turned into a non-zero exit, instead of the
+// command reporting success while its output never arrived.
+type errorTrackingWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (e *errorTrackingWriter) Write(p []byte) (int, error) {
+	n, err := e.w.Write(p)
+	if err != nil && e.err == nil {
+		e.err = err
+	}
+	return n, err
+}
+
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	tracked := &errorTrackingWriter{w: stdout}
+	code := dispatch(args, stdin, tracked, stderr)
+	if code == 0 && tracked.err != nil {
+		fmt.Fprintf(stderr, "crlc: writing output: %v\n", tracked.err)
+		return 1
+	}
+	return code
+}
+
+func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		usage(stderr)
 		return 2
