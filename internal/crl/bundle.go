@@ -596,7 +596,7 @@ func writePredicate(b *strings.Builder, prefix string, predicate Predicate) {
 		if predicate.Expression != nil {
 			fmt.Fprintf(b, "%squorum %s\n", prefix, RenderQuorumExpression(predicate.Expression))
 		} else {
-			fmt.Fprintf(b, "%squorum count(%s) >= %d\n", prefix, strings.Join(predicate.Providers, ", "), int(predicate.Value.Number))
+			fmt.Fprintf(b, "%squorum count(%s) >= %d\n", prefix, strings.Join(predicate.Providers, ", "), int64(predicate.Value.Number))
 		}
 	case PredicateTemporal:
 		fmt.Fprintf(b, "%s%s\n", prefix, renderTemporalPredicate(predicate))

@@ -193,7 +193,7 @@ func parseQuorum(fields []string) (Predicate, error) {
 			if err != nil {
 				return Predicate{}, err
 			}
-			if value.Kind != "number" || value.Number < 1 || value.Number != float64(int(value.Number)) {
+			if value.Kind != "number" || value.Number < 1 || value.Number != float64(int64(value.Number)) {
 				return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 			}
 			return normalizePredicate(Predicate{
@@ -236,7 +236,7 @@ func parseQuorum(fields []string) (Predicate, error) {
 	if err != nil {
 		return Predicate{}, err
 	}
-	if value.Kind != "number" || value.Number < 1 || value.Number != float64(int(value.Number)) {
+	if value.Kind != "number" || value.Number < 1 || value.Number != float64(int64(value.Number)) {
 		return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 	}
 	return normalizePredicate(Predicate{

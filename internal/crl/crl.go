@@ -172,7 +172,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 			return predicate, nil
 		}
 		predicate.Operator = OperatorGTE
-		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int(predicate.Value.Number)) {
+		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int64(predicate.Value.Number)) {
 			return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 		}
 		// A count carries only its number; drop any String/Bool a struct-API
@@ -201,7 +201,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		// provider count can never be met; the `N of M` sugar rejects this,
 		// and both spellings compile to the same bundle, so this must too.
 		if predicate.Value.Number > float64(len(providers)) {
-			return Predicate{}, fmt.Errorf("%w: quorum threshold %d out of range 1..%d", ErrInvalidSyntax, int(predicate.Value.Number), len(providers))
+			return Predicate{}, fmt.Errorf("%w: quorum threshold %d out of range 1..%d", ErrInvalidSyntax, int64(predicate.Value.Number), len(providers))
 		}
 	case PredicateTemporal:
 		predicate.Field = normalizeIdentifier(predicate.Field)
