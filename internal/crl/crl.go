@@ -1047,9 +1047,16 @@ func quorumTokens(fields []string) []string {
 	return tokens
 }
 
+// maxQuorumDepth caps nesting in a quorum expression. The parser is
+// recursive descent over attacker-controlled source; without a bound a
+// deeply parenthesized expression overflows the goroutine stack with an
+// unrecoverable fatal error. No legitimate expression approaches this.
+const maxQuorumDepth = 64
+
 type quorumParser struct {
 	tokens []string
 	pos    int
+	depth  int
 }
 
 func (p *quorumParser) parseOr() (*QuorumExpression, error) {
@@ -1083,6 +1090,11 @@ func (p *quorumParser) parseAnd() (*QuorumExpression, error) {
 }
 
 func (p *quorumParser) parseUnary() (*QuorumExpression, error) {
+	p.depth++
+	if p.depth > maxQuorumDepth {
+		return nil, fmt.Errorf("%w: quorum expression nested too deeply", ErrInvalidSyntax)
+	}
+	defer func() { p.depth-- }()
 	if p.match("!") {
 		expr, err := p.parseUnary()
 		if err != nil {
