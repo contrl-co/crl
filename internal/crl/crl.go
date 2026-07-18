@@ -173,6 +173,9 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int(predicate.Value.Number)) {
 			return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 		}
+		// A count carries only its number; drop any String/Bool a struct-API
+		// caller set, which the evaluator ignores but the hash would cover.
+		predicate.Value = Value{Kind: "number", Number: predicate.Value.Number}
 		if len(predicate.Providers) == 0 {
 			return Predicate{}, fmt.Errorf("%w: missing quorum providers", ErrInvalidSyntax)
 		}
@@ -1070,6 +1073,9 @@ func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
 	}
+	if len(tokens) > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
+	}
 	parser := quorumParser{tokens: tokens}
 	expr, err := parser.parseOr()
 	if err != nil {
@@ -1113,6 +1119,13 @@ func quorumTokens(fields []string) []string {
 // deeply parenthesized expression overflows the goroutine stack with an
 // unrecoverable fatal error. No legitimate expression approaches this.
 const maxQuorumDepth = 64
+
+// maxQuorumTokens caps total expression size. A flat operator chain
+// (a & a & a & ...) parses iteratively, so it never trips maxQuorumDepth,
+// but it builds an N-deep tree that the recursive tree walks (normalize,
+// evaluate) then overflow the stack on. Bounding token count bounds tree
+// depth for every shape.
+const maxQuorumTokens = 512
 
 type quorumParser struct {
 	tokens []string
