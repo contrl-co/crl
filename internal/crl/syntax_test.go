@@ -155,3 +155,25 @@ func nonStructuralTokens(tokens []Token) []Token {
 	}
 	return out
 }
+
+// A positive UTC offset in an RFC3339 timestamp used to be rejected because
+// '+' split the token, while '-' and 'Z' worked. A spaced cluster-rule '+'
+// must still tokenize on its own.
+func TestPositiveUTCOffsetInExpiresIsAccepted(t *testing.T) {
+	for _, offset := range []string{"+05:30", "-05:00", "Z"} {
+		src := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget t.x\n" +
+			"\tcollector c m file_upload from /f\n" +
+			"\t\tsignal a bool from f.a expires 2026-12-31T23:59:59" + offset + "\n\tneed a == true\n"
+		if _, err := CompileBundle(src); err != nil {
+			t.Errorf("expires offset %q rejected: %v", offset, err)
+		}
+	}
+	// A spaced cluster-rule '+' must still work.
+	cluster := "crl v1\npackage p\nbundle b\n\n" +
+		"rule ra\n\ttarget a.a\n\tcollector c1 m file_upload from /a\n\t\tsignal s1 bool from a.a ttl 30d\n\tneed s1 == true\n" +
+		"rule rb\n\ttarget a.b\n\tcollector c2 m file_upload from /b\n\t\tsignal s2 bool from b.b ttl 30d\n\tneed s2 == true\n" +
+		"cluster cl\n\trules ra + rb\n\tneed rb == true\n"
+	if _, err := CompileBundle(cluster); err != nil {
+		t.Fatalf("spaced cluster-rule + broke: %v", err)
+	}
+}
