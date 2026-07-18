@@ -161,3 +161,26 @@ func TestInvalidUTF8CollectorSourceIsRejected(t *testing.T) {
 		t.Fatal("a raw invalid-UTF-8 collector source compiled")
 	}
 }
+
+// A non-string Kind must not carry a Value.String into the hash unchecked;
+// the struct API could otherwise smuggle invalid UTF-8 past the guard.
+func TestInvalidUTF8NonStringValueIsRejected(t *testing.T) {
+	_, err := CompileBundleProgram(Bundle{
+		Version: "crl/v1", Package: "t", Name: "t.p",
+		Rules: []Rule{{
+			Name: "r", Target: "t.x",
+			Collectors: []Collector{{
+				Name: "c", ProviderType: "m", ConnectorKind: "file_upload", Source: "/f",
+				Signals: []Signal{{
+					Name: "ok", Kind: "bool", SourceField: "f.ok",
+					Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000},
+				}},
+			}},
+			Predicates: []Predicate{{Kind: "need", Field: "ok", Operator: "==",
+				Value: Value{Kind: "bool", String: "\xff"}}},
+		}},
+	})
+	if err == nil {
+		t.Fatal("invalid UTF-8 in a non-string Value.String compiled; hash-smuggling open")
+	}
+}
