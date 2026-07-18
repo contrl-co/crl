@@ -111,7 +111,7 @@ bundle buildability.power {
 		"provider.utility_record":        true,
 		"observed_at.capacity_kw":        "2026-05-01T00:00:00Z",
 		"observed_at.confirmed_at":       "2026-05-01T00:00:00Z",
-		"observed_at.construction_start": "2030-04-01T00:00:00Z",
+		"observed_at.construction_start": "2029-12-20T00:00:00Z",
 	}, time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC))
 	if !result.Authorized {
 		t.Fatalf("expected temporal rule to authorize, checks=%+v", result.Checks)
