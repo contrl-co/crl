@@ -26,3 +26,15 @@ func TestQuorumExpressionNormalDepthCompiles(t *testing.T) {
 		t.Fatalf("a normal quorum expression was rejected: %v", err)
 	}
 }
+
+// A wide flat operator chain parses iteratively, so it never trips the
+// nesting cap, but its N-deep tree overflowed the recursive normalize and
+// eval walks. Total-size bounding must reject it, not crash.
+func TestQuorumExpressionFlatChainIsBounded(t *testing.T) {
+	src := "crl v1\npackage t\nbundle t.d\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector c m file_upload from /f\n\t\tsignal a bool from f.a ttl 30d\n" +
+		"\tquorum a" + strings.Repeat(" & a", 100000) + "\n"
+	if _, err := CompileBundle(src); err == nil {
+		t.Fatal("a pathologically wide flat quorum chain compiled; the size cap is gone")
+	}
+}

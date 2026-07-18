@@ -184,3 +184,43 @@ func TestInvalidUTF8NonStringValueIsRejected(t *testing.T) {
 		t.Fatal("invalid UTF-8 in a non-string Value.String compiled; hash-smuggling open")
 	}
 }
+
+// The quorum-count branch never called normalizeValue, so a struct-API
+// Value.String on a count predicate reached the hash unchecked and two
+// byte-different strings folded to one U+FFFD hash. The count carries only
+// its number now, so the String is dropped and cannot smuggle bytes.
+func TestQuorumCountValueStringIsDropped(t *testing.T) {
+	build := func(s string) (CompiledBundle, error) {
+		return CompileBundleProgram(Bundle{
+			Version: "crl/v1", Package: "t", Name: "t.q",
+			Rules: []Rule{{
+				Name: "r", Target: "t.x",
+				Collectors: []Collector{{
+					Name: "c", ProviderType: "m", ConnectorKind: "file_upload", Source: "/f",
+					Signals: []Signal{{
+						Name: "a", Kind: "bool", SourceField: "f.a",
+						Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000},
+					}},
+				}},
+				Predicates: []Predicate{
+					{Kind: "need", Field: "a", Operator: "==", Value: Value{Kind: "bool", Bool: true}},
+					{Kind: "quorum", Operator: ">=", Value: Value{Kind: "number", Number: 1, String: s}, Providers: []string{"c"}},
+				},
+			}},
+		})
+	}
+	x, err := build("\xff")
+	if err != nil {
+		t.Fatalf("compile x: %v", err)
+	}
+	y, err := build("\xfe")
+	if err != nil {
+		t.Fatalf("compile y: %v", err)
+	}
+	if x.Program.Rules[0].Predicates[1].Value.String != "" {
+		t.Fatal("quorum count Value.String not dropped; it can still smuggle bytes into the hash")
+	}
+	if x.Hash != y.Hash {
+		t.Fatalf("count programs differing only in a dropped String must share a hash: %s vs %s", x.Hash, y.Hash)
+	}
+}
