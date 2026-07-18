@@ -705,7 +705,7 @@ func evaluateQuorum(rule Predicate, facts Facts, signals map[string]Signal, now 
 			check.Reason = ErrExpired.Error()
 			return check
 		}
-		passed := evaluateQuorumExpression(rule.Expression, facts, signals, now)
+		passed := evalQuorumTri(rule.Expression, facts, signals, now) == quorumTrue
 		check.Actual = passed
 		check.Passed = passed
 		if !check.Passed {
@@ -986,22 +986,83 @@ func subjectTruthy(facts Facts, subject string) bool {
 	return false
 }
 
-func evaluateQuorumExpression(expression *QuorumExpression, facts Facts, signals map[string]Signal, now time.Time) bool {
+// quorumTri is three-valued: a subject whose evidence is absent is unknown,
+// not false, so a negation cannot read missing evidence as "cleared". Stale
+// subjects are handled upstream by the whole-quorum taint; here unknown
+// propagates by Kleene logic, so a satisfiable branch (an OR with one
+// present side) still passes while `!absent` stays unknown and denies.
+type quorumTri int
+
+const (
+	quorumFalse quorumTri = iota
+	quorumTrue
+	quorumUnknown
+)
+
+func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string]Signal, now time.Time) quorumTri {
 	if expression == nil {
-		return false
+		return quorumFalse
 	}
 	switch expression.Kind {
 	case "subject":
-		return subjectPresent(facts, expression.Name, signals, now)
+		if !subjectValuePresent(facts, expression.Name) {
+			return quorumUnknown
+		}
+		if subjectTruthy(facts, expression.Name) {
+			return quorumTrue
+		}
+		return quorumFalse
 	case "not":
-		return !evaluateQuorumExpression(expression.Expr, facts, signals, now)
+		switch evalQuorumTri(expression.Expr, facts, signals, now) {
+		case quorumTrue:
+			return quorumFalse
+		case quorumFalse:
+			return quorumTrue
+		default:
+			return quorumUnknown
+		}
 	case "and":
-		return evaluateQuorumExpression(expression.Left, facts, signals, now) && evaluateQuorumExpression(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, signals, now)
+		right := evalQuorumTri(expression.Right, facts, signals, now)
+		if left == quorumFalse || right == quorumFalse {
+			return quorumFalse
+		}
+		if left == quorumUnknown || right == quorumUnknown {
+			return quorumUnknown
+		}
+		return quorumTrue
 	case "or":
-		return evaluateQuorumExpression(expression.Left, facts, signals, now) || evaluateQuorumExpression(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, signals, now)
+		right := evalQuorumTri(expression.Right, facts, signals, now)
+		if left == quorumTrue || right == quorumTrue {
+			return quorumTrue
+		}
+		if left == quorumUnknown || right == quorumUnknown {
+			return quorumUnknown
+		}
+		return quorumFalse
 	default:
+		return quorumFalse
+	}
+}
+
+func subjectValuePresent(facts Facts, subject string) bool {
+	if facts == nil {
 		return false
 	}
+	subject = normalizeIdentifier(subject)
+	for _, key := range []string{
+		subject,
+		"provider." + subject,
+		"provider:" + subject,
+		"rule." + subject,
+		"cluster." + subject,
+	} {
+		if _, ok := facts[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
