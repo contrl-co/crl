@@ -278,6 +278,9 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 		case currentCluster != nil:
 			switch keyword {
 			case "rules":
+				if currentCluster.Rules != nil {
+					return Document{}, fmt.Errorf("line %d: %w: duplicate rules statement in cluster", statement.Line, ErrInvalidSyntax)
+				}
 				rules, err := parseClusterRules(fields[1:])
 				if err != nil {
 					return Document{}, fmt.Errorf("line %d: %w", statement.Line, err)
