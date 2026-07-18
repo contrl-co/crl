@@ -184,6 +184,22 @@ func addDocumentDiagnostics(document crl.Document, add *func(Diagnostic)) {
 	for _, predicate := range document.Predicates {
 		addBlockNamingDiagnostics(predicate, add)
 	}
+	for _, rule := range document.Rules {
+		for _, predicate := range rule.Predicates {
+			if predicate.CarvedOut {
+				(*add)(Diagnostic{
+					Line:     predicate.Span.Line,
+					Column:   predicate.Span.Column,
+					Severity: SeverityWarning,
+					Code:     "CRL210",
+					Message: fmt.Sprintf(
+						"unindented %q after rule %q was scoped INTO that rule by the rule-body carve-out; to declare a global final policy, put it before the rules",
+						predicate.Predicate.Kind, rule.Name,
+					),
+				})
+			}
+		}
+	}
 	addUnreferencedSignalDiagnostics(document, add)
 }
 
