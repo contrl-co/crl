@@ -16,7 +16,7 @@ certificate. To verify a download:
 cosign verify-blob \
   --certificate checksums.txt.pem \
   --signature checksums.txt.sig \
-  --certificate-identity-regexp 'gitlab.com/contrl-group/crl' \
+  --certificate-identity-regexp '^https://gitlab\.com/contrl-group/crl//\.gitlab-ci\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://gitlab.com \
   checksums.txt
 sha256sum --check --ignore-missing checksums.txt
