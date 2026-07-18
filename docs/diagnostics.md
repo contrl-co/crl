@@ -29,6 +29,7 @@ positioned at the offending line where the compiler can attribute one.
 | `CRL206` | `ms` TTL — sub-second TTLs are not representable and canonicalize to exactly one second |
 | `CRL207` | `y` TTL — a year counts as exactly 365 days, no leap-year handling; spell the intent in days if the boundary matters |
 | `CRL208` | A `block` field named like an expiry flag (`*expired*`, `*_expires`) — an active blocker reports `BLOCKED`, never `EXPIRED`; declare a signal expiry or use a temporal predicate for expiry semantics |
+| `CRL209` | A signal is declared but never referenced by a `need`, `block`, `quorum`, or temporal predicate — it does not affect the decision, so dropping the predicate that used it silently removes a requirement or blocker |
 
 ## Editor integration
 
