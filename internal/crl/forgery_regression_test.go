@@ -224,3 +224,37 @@ func TestQuorumCountValueStringIsDropped(t *testing.T) {
 		t.Fatalf("count programs differing only in a dropped String must share a hash: %s vs %s", x.Hash, y.Hash)
 	}
 }
+
+// A predicate must carry only the fields its kind uses; a stray carrier
+// field (Temporal/Providers/Expression on the wrong kind) reaches the hash
+// and folds invalid UTF-8 to one U+FFFD collision via the struct API.
+func TestPredicateStrayCarrierFieldsScrubbed(t *testing.T) {
+	build := func(mut func(*Predicate)) (CompiledBundle, error) {
+		p := Predicate{Kind: "need", Field: "a", Operator: "==", Value: Value{Kind: "bool", Bool: true}}
+		mut(&p)
+		return CompileBundleProgram(Bundle{Version: "crl/v1", Package: "t", Name: "t.q",
+			Rules: []Rule{{Name: "r", Target: "t.x",
+				Collectors: []Collector{{Name: "c", ProviderType: "m", ConnectorKind: "file_upload", Source: "/f",
+					Signals: []Signal{{Name: "a", Kind: "bool", SourceField: "f.a", Expiry: SignalExpiry{Mode: "ttl", Literal: "30d", Seconds: 2592000}}}}},
+				Predicates: []Predicate{p}}}})
+	}
+	cases := map[string][2]func(*Predicate){
+		"stray Providers":  {func(p *Predicate) { p.Providers = []string{"\xff"} }, func(p *Predicate) { p.Providers = []string{"\xfe"} }},
+		"stray Expression": {func(p *Predicate) { p.Expression = &QuorumExpression{Kind: "subject", Name: "\xff"} }, func(p *Predicate) { p.Expression = &QuorumExpression{Kind: "subject", Name: "\xfe"} }},
+		"stray Temporal":   {func(p *Predicate) { p.Temporal = &TemporalExpression{Relation: "before", Reference: "\xff"} }, func(p *Predicate) { p.Temporal = &TemporalExpression{Relation: "before", Reference: "\xfe"} }},
+	}
+	for name, muts := range cases {
+		x, e1 := build(muts[0])
+		y, e2 := build(muts[1])
+		if e1 != nil || e2 != nil {
+			t.Fatalf("%s: compile %v %v", name, e1, e2)
+		}
+		p := x.Program.Rules[0].Predicates[0]
+		if p.Providers != nil || p.Expression != nil || p.Temporal != nil {
+			t.Errorf("%s: carrier field not scrubbed from need predicate", name)
+		}
+		if x.Hash != y.Hash {
+			t.Errorf("%s: scrubbed programs must share a hash, got %s vs %s", name, x.Hash, y.Hash)
+		}
+	}
+}

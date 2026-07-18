@@ -149,6 +149,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		if err := validateValue(predicate.Value); err != nil {
 			return Predicate{}, err
 		}
+		predicate.Providers, predicate.Expression, predicate.Temporal = nil, nil, nil
 	case PredicateBlock:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
@@ -156,6 +157,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		}
 		predicate.Operator = OperatorEQ
 		predicate.Value = Value{Kind: "bool"}
+		predicate.Providers, predicate.Expression, predicate.Temporal = nil, nil, nil
 	case PredicateQuorum:
 		predicate.Field = PredicateQuorum
 		if predicate.Expression != nil {
@@ -166,7 +168,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 			predicate.Operator = OperatorEQ
 			predicate.Value = Value{Kind: "bool", Bool: true}
 			predicate.Expression = expression
-			predicate.Providers = nil
+			predicate.Providers, predicate.Temporal = nil, nil
 			return predicate, nil
 		}
 		predicate.Operator = OperatorGTE
@@ -194,6 +196,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		}
 		sort.Strings(providers)
 		predicate.Providers = providers
+		predicate.Expression, predicate.Temporal = nil, nil
 	case PredicateTemporal:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
@@ -209,6 +212,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		predicate.Temporal = &temporal
 		predicate.Operator = temporal.Relation
 		predicate.Value = Value{Kind: "time", String: temporal.Reference}
+		predicate.Providers, predicate.Expression = nil, nil
 	default:
 		return Predicate{}, fmt.Errorf("%w: invalid predicate %q", ErrInvalidSyntax, predicate.Kind)
 	}
@@ -1206,6 +1210,16 @@ func (p *quorumParser) match(token string) bool {
 }
 
 func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression, error) {
+	// depth is bounded by maxQuorumTokens: the text parser caps token count,
+	// so a tree deeper than that can only come from a caller-built struct via
+	// CompileBundleProgram, which would otherwise overflow this recursion.
+	return normalizeQuorumExpressionAt(expression, 0)
+}
+
+func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*QuorumExpression, error) {
+	if depth > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
+	}
 	if expression == nil {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
 	}
@@ -1217,17 +1231,17 @@ func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression,
 		}
 		return &QuorumExpression{Kind: "subject", Name: name}, nil
 	case "not":
-		expr, err := normalizeQuorumExpression(expression.Expr)
+		expr, err := normalizeQuorumExpressionAt(expression.Expr, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		return &QuorumExpression{Kind: "not", Expr: expr}, nil
 	case "and", "or":
-		left, err := normalizeQuorumExpression(expression.Left)
+		left, err := normalizeQuorumExpressionAt(expression.Left, depth+1)
 		if err != nil {
 			return nil, err
 		}
-		right, err := normalizeQuorumExpression(expression.Right)
+		right, err := normalizeQuorumExpressionAt(expression.Right, depth+1)
 		if err != nil {
 			return nil, err
 		}
