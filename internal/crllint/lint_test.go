@@ -298,3 +298,15 @@ bundle permit.launch {
 		t.Fatalf("expected CRL208 for both the abstract-rule block and the cluster block, got %d: %#v", count, report.Diagnostics)
 	}
 }
+
+// CRL209: a declared-but-unreferenced signal does not affect the decision.
+func TestLintFlagsUnreferencedSignal(t *testing.T) {
+	src := "crl v1\npackage p.q\nbundle b.c\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector c org api from /x.json\n" +
+		"\t\tsignal used bool from x.a ttl 30d\n" +
+		"\t\tsignal dead bool from x.b ttl 30d\n\tneed used == true\n"
+	report := LintSource("t.crl", src, Options{})
+	if !hasDiagnostic(report, "CRL209", SeverityWarning) {
+		t.Fatalf("expected CRL209 for the unreferenced signal, got %#v", report.Diagnostics)
+	}
+}
