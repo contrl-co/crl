@@ -333,13 +333,41 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if formatted == string(raw) {
 			continue
 		}
-		if err := os.WriteFile(path, []byte(formatted), 0o644); err != nil {
+		if err := writeFileAtomic(path, []byte(formatted)); err != nil {
 			fmt.Fprintf(stderr, "crlc fmt: %v\n", err)
 			return 2
 		}
 		fmt.Fprintln(stdout, path)
 	}
 	return 0
+}
+
+// writeFileAtomic writes data by creating a temp file in the same directory
+// and renaming it over path, so an interrupted or failed write can never
+// truncate the original source. The file's existing mode is preserved.
+func writeFileAtomic(path string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".crlc-fmt-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeds
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // --- eval -----------------------------------------------------------
