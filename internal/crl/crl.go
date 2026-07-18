@@ -878,6 +878,12 @@ func signalExpired(signal Signal, facts Facts, now time.Time) (bool, bool) {
 	if !ok {
 		return true, true
 	}
+	// An observation stamped after the evaluation clock cannot prove freshness
+	// — nothing is observed in the future. Fail closed rather than grant a full
+	// ttl window starting from a future instant.
+	if observedAt.UTC().After(now.UTC()) {
+		return true, true
+	}
 	expiresAt := observedAt.UTC().Add(time.Duration(signal.Expiry.Seconds) * time.Second)
 	return now.UTC().After(expiresAt), true
 }

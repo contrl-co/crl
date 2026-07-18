@@ -469,3 +469,24 @@ func TestBlockOnlyFinalPolicyRejected(t *testing.T) {
 		t.Fatal("a block-only final policy compiled; empty facts would authorize it")
 	}
 }
+
+// An observation stamped after the evaluation clock cannot prove freshness —
+// nothing is observed in the future. It used to grant a full ttl window from
+// that future instant; it must now fail closed.
+func TestFutureObservationFailsClosed(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget a.b\n" +
+		"\tcollector c1 org api from /x.json\n\t\tsignal s1 bool from x.y ttl 1h\n\tneed s1 == true\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	future := EvaluateBundleAt(compiled, Facts{"s1": true, "observed_at.s1": "2027-01-01T00:00:00Z"}, now)
+	if future.Authorized {
+		t.Fatalf("a future observation authorized (%s); must fail closed", future.Result)
+	}
+	fresh := EvaluateBundleAt(compiled, Facts{"s1": true, "observed_at.s1": now.Add(-30 * time.Minute).Format(time.RFC3339)}, now)
+	if !fresh.Authorized {
+		t.Fatalf("a present fresh observation should authorize, got %s", fresh.Result)
+	}
+}
