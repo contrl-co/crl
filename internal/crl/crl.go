@@ -1303,10 +1303,10 @@ func normalizeText(value string) (string, error) {
 }
 
 func normalizeValue(value Value) (Value, error) {
-	if value.Kind == "string" {
+	if value.String != "" {
 		value.String = norm.NFC.String(value.String)
 		if !utf8.ValidString(value.String) {
-			return Value{}, fmt.Errorf("%w: invalid UTF-8 in string value", ErrInvalidSyntax)
+			return Value{}, fmt.Errorf("%w: invalid UTF-8 in value", ErrInvalidSyntax)
 		}
 	}
 	return value, nil
