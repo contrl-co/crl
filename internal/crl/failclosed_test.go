@@ -458,3 +458,14 @@ quorum regb
 		t.Fatalf("identical re-declaration should compile, got %v", err)
 	}
 }
+
+// A global final policy of only `block` predicates authorizes when its target
+// has no evidence (block ra passes when ra is unproven), so empty facts pass.
+// Such a policy must be rejected at compile.
+func TestBlockOnlyFinalPolicyRejected(t *testing.T) {
+	if _, err := CompileBundle("crl v1\npackage p\nbundle b\nblock ra\n" +
+		"\nrule ra\n\ttarget a.a\n\tcollector c1 org api from /x.json\n" +
+		"\t\tsignal s1 bool from x.y ttl 30d\n\tneed s1 == true\n"); err == nil {
+		t.Fatal("a block-only final policy compiled; empty facts would authorize it")
+	}
+}
