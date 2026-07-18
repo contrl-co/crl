@@ -286,6 +286,10 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	if *format != "text" && *format != "json" {
+		fmt.Fprintf(stderr, "crlc compile: unsupported format %q\n", *format)
+		return 2
+	}
 	source, code := readSource(flags.Args(), stdin, stderr, "crlc compile")
 	if code != 0 {
 		return code
@@ -406,6 +410,10 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	format := flags.String("format", "text", "output format: text or json")
 	requireAuthorized := flags.Bool("require-authorized", false, "exit 1 unless the result is AUTHORIZED")
 	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if *format != "text" && *format != "json" {
+		fmt.Fprintf(stderr, "crlc eval: unsupported format %q\n", *format)
 		return 2
 	}
 	if *factsPath == "" {
