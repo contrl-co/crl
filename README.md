@@ -1,93 +1,115 @@
-# CRL
+# CRL — CONTRL Rule Language
 
+CRL is a small, deterministic language for authorization rules over
+collected evidence. A rule declares what evidence must exist, how
+fresh it must be, and what must be true of it; evaluation returns
+exactly one of five outcomes: `AUTHORIZED`, `DENIED`, `BLOCKED`,
+`INSUFFICIENT_EVIDENCE`, or `EXPIRED`.
 
+Three properties carry the design:
 
-## Getting started
+- **Deterministic.** The same source compiles to the same canonical
+  text and the same SHA-256 hash on every platform, forever within an
+  edition. No clocks, no map ordering, no locale — a decision can be
+  pinned by hash and re-verified years later.
+- **Fail closed.** Evidence whose freshness cannot be proven never
+  satisfies a rule. A missing timestamp, a stale attestation, or a
+  clockless evaluation reads as `EXPIRED`, not as silently true.
+- **Five outcomes, one contract.** Only `AUTHORIZED` advances
+  anything; the other four withhold for distinct, machine-readable
+  reasons.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Example
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+```crl
+crl v1
+package examples.permits
+bundle permit.quorum
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+rule permit_application
+	target permit.application
+	collector application_file municipality file_upload from /bundles/application.json
+		signal application_complete bool from application.complete ttl 30d
+	collector registry_check land_registry api from /bundles/registry.json
+		signal permit_hold_active bool from permit.hold_active ttl 30d
+	collector reviewer_attest reviewer attestation from /bundles/review.json
+		signal reviewer_approved bool from review.approved ttl 30d
+	need application_complete == true
+	block permit_hold_active
+	quorum 2 of 3 application_file registry_check reviewer_attest
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/contrl-group/crl.git
-git branch -M main
-git push -uf origin main
+
+```sh
+$ crlc lint permit.crl
+permit.crl: ok
+
+$ crlc compile permit.crl | tail -1
+# sha256:998c476096b22d8f02ac3cf7c42705ac184ece6c9e0fc9f3c15ba7ffb4aecb3b
+
+$ crlc eval -facts facts.json -at 2026-06-02T00:00:00Z permit.crl
+AUTHORIZED
 ```
 
-## Integrate with your tools
+More in [examples/](examples/), including facts files you can run.
 
-* [Set up project integrations](https://gitlab.com/contrl-group/crl/-/settings/integrations)
+## Install
 
-## Collaborate with your team
+```sh
+brew tap contrl-group/crl https://gitlab.com/contrl-group/homebrew-crl.git
+brew install crlc
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+curl -fsSL https://gitlab.com/contrl-group/crl/-/raw/main/packaging/install.sh | sh
 
-## Test and Deploy
+go install gitlab.com/contrl-group/crl/cmd/crlc@latest
+```
 
-Use the built-in continuous integration in GitLab.
+Releases are reproducible builds with SHA-256 checksums, CycloneDX
+SBOMs, and keyless cosign signatures — verify before trusting; see
+[docs/install.md](docs/install.md).
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## Documentation
 
-***
+| | |
+|---|---|
+| [spec/](spec/README.md) | The CRL v1 language specification — syntax, semantics, canonical form, editions |
+| [docs/crlc.md](docs/crlc.md) | CLI reference and the Go embedding API |
+| [docs/authoring-patterns.md](docs/authoring-patterns.md) | Common bundle shapes and when to use each |
+| [docs/diagnostics.md](docs/diagnostics.md) | The `CRL###` lint diagnostic catalog |
+| [examples/](examples/README.md) | Runnable examples covering every language feature |
+| [editors/vscode/](editors/vscode/README.md) | VS Code extension: highlighting, snippets, live diagnostics |
 
-# Editing this README
+Every CRL snippet in this repository — spec, README, examples — is
+extracted and compiled in CI. If it's written down here, it compiles.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## What this repository is (and is not)
 
-## Suggestions for a good README
+This is the public home of the CRL **language**: specification,
+compiler front-end, linter, formatter, local evaluator, graph
+projection, examples, and editor tooling. All of it is meant to be
+used freely, in the open (license finalization pending — see below).
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+The CONTRL **platform** — the operated services that bind rules to
+real evidence streams and record decisions in a verifiable audit
+trail — is a separate, closed-source product.
+Running `crlc eval` tells you what a rule decides about facts you
+supply; it does not mint a decision record anyone else must trust.
+That separation is deliberate: the language spreads the standard, and
+the platform is accountable for operating it.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Code and specification are licensed under [Apache-2.0](LICENSE).
+The CRL and CONTRL names are trademarks — see
+[TRADEMARKS.md](TRADEMARKS.md).
+
+> **Licensing status: DRAFT, pending legal review.** Apache-2.0 for
+> the toolchain and spec is the current working default; counsel may
+> instead direct a no-derivatives license for the specification text.
+> Nothing here is a final grant until this notice is removed.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — toolchain fixes, spec
+corrections, examples, and editor tooling are welcome; changes to
+compiler output are edition changes and need a design issue first.
+Security reports: [SECURITY.md](SECURITY.md).
