@@ -34,7 +34,7 @@ gofmt-vet:
   image: $GO_IMAGE
   <<: *go-cache
   script:
-    - test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files need formatting"; exit 1; }
+    - 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files need formatting"; exit 1; }'
     - go vet ./...
 
 test:
