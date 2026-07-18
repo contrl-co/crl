@@ -29,13 +29,13 @@ var ErrDuplicateKey = errors.New("canonical json: duplicate key")
 //   - Integers are preserved at full precision (no round-trip through
 //     float64).
 //   - Duplicate object keys in the input are rejected (ErrDuplicateKey).
-//   - Strings are not normalised and not HTML-escaped. They are NOT
+//   - Strings are not normalized and not HTML-escaped. They are NOT
 //     emitted verbatim: json.Marshal replaces invalid UTF-8 with U+FFFD,
 //     so distinct invalid inputs still collide here. Reject invalid UTF-8
 //     upstream.
 //
 // This is RFC 8785 for the inputs CRL produces. Callers hashing text must
-// normalise it first, in the layer that also compares it; normalising here
+// normalize it first, in the layer that also compares it; normalizing here
 // would let two different programs share a hash.
 //
 // The function deliberately goes through json.Marshal first so that
