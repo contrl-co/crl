@@ -67,6 +67,13 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 	var currentCluster *ClusterObject
 	var currentCollector *CollectorObject
 	var blockStack []string
+	// ruleBodyIndented records whether the current rule has any indented
+	// body statement. A predicate is only "carved out" of a rule in a
+	// meaningful way when the author is otherwise using indentation form
+	// (indented body) but dedents the predicate to column 0 — in a fully
+	// flat rule the predicate unambiguously belongs to it, so there is no
+	// hidden global-policy intent to warn about.
+	ruleBodyIndented := false
 
 	flushCollector := func() {
 		if currentRule != nil && currentCollector != nil {
@@ -175,6 +182,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[2], Abstract: true}
+				ruleBodyIndented = false
 				if len(fields) == 5 {
 					currentRule.Extends = fields[4]
 				}
@@ -192,6 +200,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[1], Abstract: true}
+				ruleBodyIndented = false
 				if len(fields) == 4 {
 					currentRule.Extends = fields[3]
 				}
@@ -209,6 +218,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[1]}
+				ruleBodyIndented = false
 				if len(fields) == 4 {
 					currentRule.Extends = fields[3]
 				}
@@ -243,6 +253,9 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 
 		switch {
 		case currentRule != nil:
+			if statement.Indent > 0 {
+				ruleBodyIndented = true
+			}
 			switch keyword {
 			case "target":
 				if len(fields) != 2 {
@@ -284,7 +297,12 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				if err != nil {
 					return Document{}, err
 				}
-				predicate.CarvedOut = forceRuleBody
+				// Only flag the carve-out in indentation form (no open brace
+				// block scoping the predicate) and only when the rule's body is
+				// otherwise indented — the mixed-indentation shape that hides a
+				// possible global-policy intent. A braced rule or a fully flat
+				// rule has no such ambiguity.
+				predicate.CarvedOut = forceRuleBody && len(blockStack) == 0 && ruleBodyIndented
 				currentRule.Predicates = append(currentRule.Predicates, predicate)
 			default:
 				return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)
