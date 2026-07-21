@@ -583,23 +583,20 @@ func parseValue(raw string) (Value, error) {
 	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 		return Value{}, fmt.Errorf("%w: invalid literal %q", ErrInvalidSyntax, raw)
 	}
-	// Reject an integer literal that float64 (the number type) cannot
-	// represent exactly. Silently rounding `== 9007199254740993` to ...992
-	// would alter a threshold — a real hazard for a governance language
-	// comparing large amounts — and give two distinct literals one hash.
-	// The test is exact representability, NOT a magnitude threshold: many
-	// large round values (10^18, one ETH in wei) ARE exact and must
-	// compile, and the canonical text renders them as plain integers that
-	// have to recompile. An integer literal is one with no fraction or
-	// exponent; fractions are inherently approximate and allowed.
-	if !strings.ContainsAny(raw, ".eE") {
-		want, ok := new(big.Int).SetString(raw, 10)
-		if !ok {
-			return Value{}, fmt.Errorf("%w: invalid integer %q", ErrInvalidSyntax, raw)
-		}
+	// Reject a literal that denotes a whole number float64 cannot represent
+	// exactly. Silently rounding `== 9007199254740993` to ...992 would alter
+	// a threshold — a real hazard for a governance language comparing large
+	// amounts — and give two distinct literals one hash. The test is exact
+	// representability, NOT a magnitude threshold: many large round values
+	// (10^18, one ETH in wei) ARE exact and must compile. Deciding via
+	// big.Rat covers exponent forms too (`1e23` denotes an integer that is
+	// not representable). A literal with a genuine fractional value is
+	// inherently approximate and allowed.
+	if rat, ok := new(big.Rat).SetString(raw); ok && rat.IsInt() {
+		want := rat.Num()
 		got, _ := big.NewFloat(n).Int(nil)
 		if got.Cmp(want) != 0 {
-			return Value{}, fmt.Errorf("%w: integer %q is not exactly representable (it would round to a different value)", ErrInvalidSyntax, raw)
+			return Value{}, fmt.Errorf("%w: number %q is not exactly representable (it would round to a different value)", ErrInvalidSyntax, raw)
 		}
 	}
 	// Normalize negative zero to zero so `-0` and `0` share one canonical
@@ -1596,5 +1593,14 @@ func renderTemporalReference(reference string) string {
 }
 
 func renderNumber(number float64) string {
+	// Render a whole number as its exact integer digits. FormatFloat's
+	// shortest form can differ from the exact integer a large float
+	// represents (e.g. 2^55 renders as ...970, not ...968), and that text
+	// would fail the ingestion exactness check on recompile — canonical
+	// text must always recompile. Fractions keep their shortest form.
+	if !math.IsInf(number, 0) && number == math.Trunc(number) {
+		integer, _ := big.NewFloat(number).Int(nil)
+		return integer.String()
+	}
 	return strconv.FormatFloat(number, 'f', -1, 64)
 }

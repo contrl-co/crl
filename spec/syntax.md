@@ -69,10 +69,12 @@ characters outside the unquoted source alphabet
 
 Numbers are finite decimals with an optional leading `-` and at most
 one decimal point. They are carried as 64-bit floating point; NaN and
-infinities are rejected, and an integer literal that float64 cannot
-represent exactly is rejected rather than silently rounded, so a large
-threshold can never be quietly altered (a value like 10^18 that IS exact
-compiles). `-0` normalizes to `0`.
+infinities are rejected, and a literal denoting a whole number that
+float64 cannot represent exactly is rejected rather than silently
+rounded, so a large threshold can never be quietly altered — a value
+like `10^18` (or `1e18`) that IS exact compiles and its canonical text
+renders the exact integer. Genuine fractions are approximate and
+allowed. `-0` normalizes to `0`.
 
 ### Booleans
 
