@@ -392,7 +392,20 @@ func parseDurationSeconds(literal string) (int64, error) {
 	}
 	switch match[2] {
 	case "ms":
-		return 1, nil
+		// Durations have one-second granularity, so a millisecond value is
+		// rounded UP to whole seconds (a whole-second value like 60000ms is
+		// exact; a sub-second value like 500ms rounds to 1s). Rounding up
+		// keeps an age/`>=` requirement from being under-satisfied. Returning
+		// a constant 1 regardless of magnitude — the previous behavior —
+		// silently treated 60000ms as 1s.
+		seconds := value / 1000
+		if value%1000 != 0 {
+			seconds++
+		}
+		if seconds < 1 {
+			seconds = 1
+		}
+		return checkedDurationSeconds(seconds, 1, literal)
 	case "s":
 		return checkedDurationSeconds(value, 1, literal)
 	case "m":

@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gitlab.com/contrl-group/crl/internal/crl"
@@ -293,14 +294,14 @@ func addExpiryRoundingDiagnostics(signal crl.SignalObject, add *func(Diagnostic)
 	}
 	literal := strings.ToLower(strings.TrimSpace(expiry.Literal))
 	switch {
-	case strings.HasSuffix(literal, "ms"):
+	case strings.HasSuffix(literal, "ms") && subSecondMillis(literal):
 		(*add)(Diagnostic{
 			Line:     signal.Span.Line,
 			Column:   signal.Span.Column,
 			Severity: SeverityWarning,
 			Code:     "CRL206",
 			Message: fmt.Sprintf(
-				"ttl %q rounds to 1s: sub-second TTLs are not representable and the millisecond value is discarded",
+				"ttl %q rounds up to the next whole second: durations have one-second granularity, so a sub-second value is not represented exactly",
 				expiry.Literal,
 			),
 		})
@@ -689,4 +690,15 @@ func MeetsThreshold(diagnostics []Diagnostic, threshold Severity) bool {
 		}
 	}
 	return false
+}
+
+// subSecondMillis reports whether an `ms` duration literal is not a whole
+// number of seconds (so it is rounded up to the next second at compile).
+func subSecondMillis(literal string) bool {
+	digits := strings.TrimSuffix(literal, "ms")
+	n, err := strconv.Atoi(digits)
+	if err != nil {
+		return true
+	}
+	return n%1000 != 0
 }

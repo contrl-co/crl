@@ -89,7 +89,13 @@ func syntaxFields(tokens []Token) []string {
 				i = next
 				continue
 			}
-			fields = append(fields, logicalFieldAlias(token.Literal))
+			// Keep the raw identifier here. The and/or/not -> &/|/! aliasing
+			// is only meaningful inside a quorum expression, and quorumTokens
+			// applies it there; aliasing in every field position would
+			// silently rewrite an unquoted `and`/`or`/`not` used as a
+			// collector source or signal field path, colliding distinct
+			// programs onto one hash.
+			fields = append(fields, token.Literal)
 		case TokenLParen:
 			fields = append(fields, "(")
 		case TokenRParen:
@@ -142,7 +148,9 @@ func renderCountCall(tokens []Token, start int) (string, int, bool) {
 			if needsCallSpace(b.String()) {
 				b.WriteString(" ")
 			}
-			b.WriteString(logicalFieldAlias(token.Literal))
+			// count(...) subjects are names, not operators; keep them raw so
+			// a subject spelled `and`/`or`/`not` is not rewritten.
+			b.WriteString(token.Literal)
 		}
 	}
 	b.WriteString(")")

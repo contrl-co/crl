@@ -48,7 +48,20 @@ weekly; the v1 edition's compilation contract does not change (see
 - Newly rejected (each could previously produce a misleading or unsafe
   bundle): duplicate `target`, `package`, `bundle`, and cluster `rules`
   statements; a `count()` threshold above the subject count; a
-  block-only global final policy; invalid UTF-8 and oversized source.
+  block-only or otherwise inverting global final policy (one that
+  authorizes when a rule fails, e.g. `quorum not r`); invalid UTF-8 and
+  oversized source.
+- A millisecond duration now converts to real seconds (rounded up):
+  `60000ms` is `60s`, where it was previously treated as `1s` — which
+  under-satisfied an `age >=` requirement.
+- An unquoted `and`/`or`/`not` used as a collector source or signal
+  field path stays literal instead of aliasing to `&`/`|`/`!`, which had
+  collided distinct locators onto one hash.
+- Associative quorum groupings (`a & (b & c)`) canonicalize to one tree,
+  so the emitted canonical text always recompiles to the same hash.
+- Resource bounds so an in-limit source cannot exhaust memory: an
+  aggregate per-bundle quorum budget and an abstract-rule inheritance
+  depth cap.
 - The struct API and the text parser now accept the same quorum
   expressions, so a struct-built bundle can no longer emit canonical
   text the compiler refuses to recompile.

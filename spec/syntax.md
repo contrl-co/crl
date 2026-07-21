@@ -81,7 +81,7 @@ A duration is a positive integer (no leading zero) plus a unit:
 
 | Unit | Meaning |
 |---|---|
-| `ms` | accepted, but the compiled duration coerces to exactly one second — sub-second precision is not representable (lint `CRL206`). The literal is preserved in the canonical text, so `ttl 500ms` and `ttl 1s` are semantically identical yet hash differently |
+| `ms` | milliseconds, rounded **up** to whole seconds — durations have one-second granularity, so `60000ms` is exactly `60s` while `500ms` rounds to `1s` (lint `CRL206` flags a sub-second value). The literal is preserved in the canonical text, so `500ms` and `1s` are equivalent yet hash differently |
 | `s` | seconds |
 | `m` | minutes |
 | `h` | hours |
