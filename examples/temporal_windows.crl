@@ -1,0 +1,18 @@
+crl v1
+package examples.certification
+bundle equipment.certification
+
+# The temporal predicate family: before/after another time signal,
+# a bounded window after a reference, and minimum age relative to the
+# evaluation clock.
+rule equipment_certification
+	target equipment.certification
+	collector cert_registry certifier api from /bundles/certs.json
+		signal certified_at time from cert.issued_at ttl 5y
+		signal installed_at time from equipment.installed_at ttl 5y
+		signal recalibrated_at time from cert.recalibrated_at ttl 1y
+	need certified_at after "2020-01-01T00:00:00Z"
+	need certified_at before now
+	need recalibrated_at within 90d after installed_at
+	need recalibrated_at age >= 1d
+	quorum cert_registry

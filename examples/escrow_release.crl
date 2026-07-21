@@ -1,0 +1,21 @@
+crl v1
+package examples.escrow
+bundle escrow.release
+
+# String and number comparisons, units, the `required` keyword, and an
+# absolute expiry: the funding round must be verifiably open, priced
+# within bounds, and attested before a hard deadline.
+rule escrow_release
+	target escrow.release
+	collector treasury_api treasury api_poll from /bundles/treasury.json schema treasury_v2
+		signal round_status string from round.status required ttl 12h
+		signal committed_usd number from round.committed_usd unit usd ttl 12h
+		signal fee_bps number from round.fee_bps unit bps ttl 12h
+		signal attested_at time from round.attested_at ttl 7d
+	need round_status == "open"
+	need round_status != "suspended"
+	need committed_usd >= 250000
+	need fee_bps <= 150
+	need fee_bps < 500
+	need attested_at before "2027-01-01T00:00:00Z"
+	quorum treasury_api

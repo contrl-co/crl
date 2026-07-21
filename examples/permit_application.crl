@@ -1,0 +1,15 @@
+crl v1
+package examples.permits
+
+bundle permit.application {
+    rule permit_application {
+        target permit.application
+        collector application_file municipality file_upload from /bundles/application.json schema permit_application_v1 {
+            signal application_complete bool from application.complete ttl 30d
+            signal permit_hold_active bool from permit.hold_active ttl 30d
+        }
+        need application_complete == true
+        block permit_hold_active
+        quorum application_file
+    }
+}
