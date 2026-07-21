@@ -55,3 +55,28 @@ func TestStructBuiltQuorumTreeIsBounded(t *testing.T) {
 		t.Fatal("a struct-built deep quorum tree compiled; the recursion is unbounded")
 	}
 }
+
+// The token cap must be applied DURING tokenization, not after. Otherwise a
+// pathological field (millions of nested parens) materializes a multi-million
+// entry token slice — gigabytes of transient memory — before the size check
+// rejects it. quorumTokens must stop just past the cap.
+func TestQuorumTokensStopsAtCap(t *testing.T) {
+	field := strings.Repeat("(", maxQuorumTokens*8) + "a" + strings.Repeat(")", maxQuorumTokens*8)
+	tokens := quorumTokens([]string{field})
+	if len(tokens) > maxQuorumTokens+1 {
+		t.Fatalf("quorumTokens built %d tokens for a pathological field; want <= %d", len(tokens), maxQuorumTokens+1)
+	}
+}
+
+// The lexer emits one token per delimiter, so a source past the token cap must
+// be rejected before it materializes a multi-million-entry slice (gigabytes).
+// This is what actually bounds the memory of a deeply nested quorum expression;
+// the quorum token cap alone runs too late.
+func TestLexerRejectsTooManyTokens(t *testing.T) {
+	// Well over maxTokens simple space-separated identifiers, so the only
+	// failure is the token cap and not some other syntax error.
+	src := "crl v1\n" + strings.Repeat("a ", maxTokens+10)
+	if _, err := Lex(src); err == nil {
+		t.Fatal("a source past the lexer token cap lexed; the cap is gone")
+	}
+}
