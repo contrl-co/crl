@@ -66,3 +66,30 @@ func TestExactLargeIntegersCompileAndRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Exact whole-number values must render to their exact integer digits so
+// the canonical text recompiles; an exponent literal denoting an inexact
+// integer must be rejected too.
+func TestExactIntegerRenderRoundTrips(t *testing.T) {
+	src := func(v string) string {
+		return "crl v1\npackage n\nbundle n\nrule r\n\ttarget t.r\n\tcollector c org api from /x.json\n\t\tsignal s number from x ttl 30d\n\tneed s >= " + v + "\n\tquorum c\n"
+	}
+	for _, exact := range []string{"36028797018963968", "20000000000000008", "18014398509481984", "1e18", "1.5e3"} {
+		compiled, err := CompileBundle(src(exact))
+		if err != nil {
+			t.Fatalf("exact %q must compile: %v", exact, err)
+		}
+		re, err := CompileBundle(compiled.CanonicalText)
+		if err != nil {
+			t.Fatalf("exact %q canonical text must recompile: %v", exact, err)
+		}
+		if re.Hash != compiled.Hash {
+			t.Errorf("exact %q must round-trip", exact)
+		}
+	}
+	for _, inexact := range []string{"1e23", "9007199254740993", "36028797018963970"} {
+		if _, err := CompileBundle(src(inexact)); err == nil {
+			t.Errorf("inexact %q must be rejected", inexact)
+		}
+	}
+}
