@@ -10,8 +10,8 @@ authoring. Codes are append-only: a code never changes meaning.
 |---|---|
 | `CRL100` | Lexical or statement-level syntax error (bad token, unterminated string, malformed statement) |
 | `CRL101` | Source contains no statements |
-| `CRL110` | Document-structure error (misplaced declaration, unclosed block, signal before collector, malformed inheritance) |
-| `CRL120` | Compile error (unknown signal or quorum subject, type mismatch, unsupported operator, duplicate names, conflicting expiry, unreachable rule under a final policy) |
+| `CRL110` | Document-structure error (misplaced declaration; duplicate `target`, `package`, `bundle`, or cluster `rules` statement; unclosed block; signal before collector; malformed inheritance; quorum threshold out of range; quorum expression too large or too deeply nested) |
+| `CRL120` | Compile error (unknown signal or quorum subject, type mismatch, unsupported operator, duplicate names, conflicting expiry, unreachable rule under a final policy, block-only global final policy) |
 
 The message carries the underlying compiler error; the diagnostic is
 positioned at the offending line where the compiler can attribute one.
