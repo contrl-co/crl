@@ -44,7 +44,7 @@ $ crlc lint permit.crl
 permit.crl: ok
 
 $ crlc compile permit.crl | tail -1
-# sha256:998c476096b22d8f02ac3cf7c42705ac184ece6c9e0fc9f3c15ba7ffb4aecb3b
+# sha256:9c25bb48199e652cbf1a1a272d8feccf26f4c61d4940db31bf95b7f9f4e1d8e7
 
 $ crlc eval -facts facts.json -at 2026-06-02T00:00:00Z permit.crl
 AUTHORIZED

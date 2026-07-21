@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -138,9 +141,15 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		if err := validateOperator(predicate.Operator); err != nil {
 			return Predicate{}, err
 		}
+		normalizedValue, err := normalizeValue(predicate.Value)
+		if err != nil {
+			return Predicate{}, err
+		}
+		predicate.Value = normalizedValue
 		if err := validateValue(predicate.Value); err != nil {
 			return Predicate{}, err
 		}
+		predicate.Providers, predicate.Expression, predicate.Temporal = nil, nil, nil
 	case PredicateBlock:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
@@ -148,6 +157,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		}
 		predicate.Operator = OperatorEQ
 		predicate.Value = Value{Kind: "bool"}
+		predicate.Providers, predicate.Expression, predicate.Temporal = nil, nil, nil
 	case PredicateQuorum:
 		predicate.Field = PredicateQuorum
 		if predicate.Expression != nil {
@@ -158,13 +168,16 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 			predicate.Operator = OperatorEQ
 			predicate.Value = Value{Kind: "bool", Bool: true}
 			predicate.Expression = expression
-			predicate.Providers = nil
+			predicate.Providers, predicate.Temporal = nil, nil
 			return predicate, nil
 		}
 		predicate.Operator = OperatorGTE
 		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int(predicate.Value.Number)) {
 			return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 		}
+		// A count carries only its number; drop any String/Bool a struct-API
+		// caller set, which the evaluator ignores but the hash would cover.
+		predicate.Value = Value{Kind: "number", Number: predicate.Value.Number}
 		if len(predicate.Providers) == 0 {
 			return Predicate{}, fmt.Errorf("%w: missing quorum providers", ErrInvalidSyntax)
 		}
@@ -183,6 +196,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		}
 		sort.Strings(providers)
 		predicate.Providers = providers
+		predicate.Expression, predicate.Temporal = nil, nil
 	case PredicateTemporal:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
@@ -198,6 +212,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		predicate.Temporal = &temporal
 		predicate.Operator = temporal.Relation
 		predicate.Value = Value{Kind: "time", String: temporal.Reference}
+		predicate.Providers, predicate.Expression = nil, nil
 	default:
 		return Predicate{}, fmt.Errorf("%w: invalid predicate %q", ErrInvalidSyntax, predicate.Kind)
 	}
@@ -217,7 +232,11 @@ func normalizeCollector(collector Collector) (Collector, error) {
 	if !identifierPattern.MatchString(collector.ConnectorKind) {
 		return Collector{}, fmt.Errorf("%w: invalid connector kind %q", ErrInvalidSyntax, collector.ConnectorKind)
 	}
-	collector.Source = strings.TrimSpace(collector.Source)
+	source, err := normalizeText(collector.Source)
+	if err != nil {
+		return Collector{}, err
+	}
+	collector.Source = source
 	if collector.Source == "" {
 		return Collector{}, fmt.Errorf("%w: invalid collector source %q", ErrInvalidSyntax, collector.Source)
 	}
@@ -251,7 +270,11 @@ func normalizeSignal(signal Signal) (Signal, error) {
 	default:
 		return Signal{}, fmt.Errorf("%w: invalid signal kind %q", ErrInvalidSyntax, signal.Kind)
 	}
-	signal.SourceField = strings.TrimSpace(signal.SourceField)
+	sourceField, err := normalizeText(signal.SourceField)
+	if err != nil {
+		return Signal{}, err
+	}
+	signal.SourceField = sourceField
 	if signal.SourceField == "" {
 		return Signal{}, fmt.Errorf("%w: invalid signal source field %q", ErrInvalidSyntax, signal.SourceField)
 	}
@@ -689,7 +712,7 @@ func evaluateQuorum(rule Predicate, facts Facts, signals map[string]Signal, now 
 			check.Reason = ErrExpired.Error()
 			return check
 		}
-		passed := evaluateQuorumExpression(rule.Expression, facts, signals, now)
+		passed := evalQuorumTri(rule.Expression, facts, signals, now) == quorumTrue
 		check.Actual = passed
 		check.Passed = passed
 		if !check.Passed {
@@ -970,28 +993,92 @@ func subjectTruthy(facts Facts, subject string) bool {
 	return false
 }
 
-func evaluateQuorumExpression(expression *QuorumExpression, facts Facts, signals map[string]Signal, now time.Time) bool {
+// quorumTri is three-valued: a subject whose evidence is absent is unknown,
+// not false, so a negation cannot read missing evidence as "cleared". Stale
+// subjects are handled upstream by the whole-quorum taint; here unknown
+// propagates by Kleene logic, so a satisfiable branch (an OR with one
+// present side) still passes while `!absent` stays unknown and denies.
+type quorumTri int
+
+const (
+	quorumFalse quorumTri = iota
+	quorumTrue
+	quorumUnknown
+)
+
+func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string]Signal, now time.Time) quorumTri {
 	if expression == nil {
-		return false
+		return quorumFalse
 	}
 	switch expression.Kind {
 	case "subject":
-		return subjectPresent(facts, expression.Name, signals, now)
+		if !subjectValuePresent(facts, expression.Name) {
+			return quorumUnknown
+		}
+		if subjectTruthy(facts, expression.Name) {
+			return quorumTrue
+		}
+		return quorumFalse
 	case "not":
-		return !evaluateQuorumExpression(expression.Expr, facts, signals, now)
+		switch evalQuorumTri(expression.Expr, facts, signals, now) {
+		case quorumTrue:
+			return quorumFalse
+		case quorumFalse:
+			return quorumTrue
+		default:
+			return quorumUnknown
+		}
 	case "and":
-		return evaluateQuorumExpression(expression.Left, facts, signals, now) && evaluateQuorumExpression(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, signals, now)
+		right := evalQuorumTri(expression.Right, facts, signals, now)
+		if left == quorumFalse || right == quorumFalse {
+			return quorumFalse
+		}
+		if left == quorumUnknown || right == quorumUnknown {
+			return quorumUnknown
+		}
+		return quorumTrue
 	case "or":
-		return evaluateQuorumExpression(expression.Left, facts, signals, now) || evaluateQuorumExpression(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, signals, now)
+		right := evalQuorumTri(expression.Right, facts, signals, now)
+		if left == quorumTrue || right == quorumTrue {
+			return quorumTrue
+		}
+		if left == quorumUnknown || right == quorumUnknown {
+			return quorumUnknown
+		}
+		return quorumFalse
 	default:
+		return quorumFalse
+	}
+}
+
+func subjectValuePresent(facts Facts, subject string) bool {
+	if facts == nil {
 		return false
 	}
+	subject = normalizeIdentifier(subject)
+	for _, key := range []string{
+		subject,
+		"provider." + subject,
+		"provider:" + subject,
+		"rule." + subject,
+		"cluster." + subject,
+	} {
+		if _, ok := facts[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
 	tokens := quorumTokens(fields)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
+	}
+	if len(tokens) > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
 	}
 	parser := quorumParser{tokens: tokens}
 	expr, err := parser.parseOr()
@@ -1031,9 +1118,23 @@ func quorumTokens(fields []string) []string {
 	return tokens
 }
 
+// maxQuorumDepth caps nesting in a quorum expression. The parser is
+// recursive descent over attacker-controlled source; without a bound a
+// deeply parenthesized expression overflows the goroutine stack with an
+// unrecoverable fatal error. No legitimate expression approaches this.
+const maxQuorumDepth = 64
+
+// maxQuorumTokens caps total expression size. A flat operator chain
+// (a & a & a & ...) parses iteratively, so it never trips maxQuorumDepth,
+// but it builds an N-deep tree that the recursive tree walks (normalize,
+// evaluate) then overflow the stack on. Bounding token count bounds tree
+// depth for every shape.
+const maxQuorumTokens = 512
+
 type quorumParser struct {
 	tokens []string
 	pos    int
+	depth  int
 }
 
 func (p *quorumParser) parseOr() (*QuorumExpression, error) {
@@ -1067,6 +1168,11 @@ func (p *quorumParser) parseAnd() (*QuorumExpression, error) {
 }
 
 func (p *quorumParser) parseUnary() (*QuorumExpression, error) {
+	p.depth++
+	if p.depth > maxQuorumDepth {
+		return nil, fmt.Errorf("%w: quorum expression nested too deeply", ErrInvalidSyntax)
+	}
+	defer func() { p.depth-- }()
 	if p.match("!") {
 		expr, err := p.parseUnary()
 		if err != nil {
@@ -1104,6 +1210,16 @@ func (p *quorumParser) match(token string) bool {
 }
 
 func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression, error) {
+	// depth is bounded by maxQuorumTokens: the text parser caps token count,
+	// so a tree deeper than that can only come from a caller-built struct via
+	// CompileBundleProgram, which would otherwise overflow this recursion.
+	return normalizeQuorumExpressionAt(expression, 0)
+}
+
+func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*QuorumExpression, error) {
+	if depth > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
+	}
 	if expression == nil {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
 	}
@@ -1115,17 +1231,17 @@ func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression,
 		}
 		return &QuorumExpression{Kind: "subject", Name: name}, nil
 	case "not":
-		expr, err := normalizeQuorumExpression(expression.Expr)
+		expr, err := normalizeQuorumExpressionAt(expression.Expr, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		return &QuorumExpression{Kind: "not", Expr: expr}, nil
 	case "and", "or":
-		left, err := normalizeQuorumExpression(expression.Left)
+		left, err := normalizeQuorumExpressionAt(expression.Left, depth+1)
 		if err != nil {
 			return nil, err
 		}
-		right, err := normalizeQuorumExpression(expression.Right)
+		right, err := normalizeQuorumExpressionAt(expression.Right, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -1198,7 +1314,29 @@ func RenderQuorumExpression(expression *QuorumExpression) string {
 }
 
 func normalizeIdentifier(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+	return strings.ToLower(strings.TrimSpace(norm.NFC.String(value)))
+}
+
+// NFC lives here, not in crypto.CanonicalJSON: the hash must cover the
+// same bytes the evaluator compares. Invalid UTF-8 is rejected because
+// json.Marshal folds it to U+FFFD inside the hash while the evaluator keeps
+// the raw bytes, so two distinct programs would otherwise share a hash.
+func normalizeText(value string) (string, error) {
+	value = norm.NFC.String(strings.TrimSpace(value))
+	if !utf8.ValidString(value) {
+		return "", fmt.Errorf("%w: invalid UTF-8", ErrInvalidSyntax)
+	}
+	return value, nil
+}
+
+func normalizeValue(value Value) (Value, error) {
+	if value.String != "" {
+		value.String = norm.NFC.String(value.String)
+		if !utf8.ValidString(value.String) {
+			return Value{}, fmt.Errorf("%w: invalid UTF-8 in value", ErrInvalidSyntax)
+		}
+	}
+	return value, nil
 }
 
 func unquote(raw string) string {
