@@ -1174,6 +1174,16 @@ const maxQuorumDepth = 64
 // depth for every shape.
 const maxQuorumTokens = 512
 
+// maxBundleQuorumFields caps the TOTAL quorum-expression size summed
+// across every predicate in a bundle. The per-expression cap bounds one
+// expression, but a source may pack thousands of near-cap expressions
+// into the 8 MiB source limit, and each one costs superlinear
+// normalization work — so without an aggregate bound an in-cap source can
+// still exhaust memory. This budget allows far more quorum content than
+// any real bundle (a hundred-plus maximum-size expressions) while
+// bounding the worst case.
+const maxBundleQuorumFields = 1 << 16
+
 type quorumParser struct {
 	tokens []string
 	pos    int
@@ -1271,8 +1281,19 @@ func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression,
 	// removes tokens and parens), so it never rejects a text-accepted input.
 	// strings.Fields mirrors how the lexer splits the rendered text into the
 	// whitespace-separated fields quorumTokens expects.
-	if _, err := parseQuorumFields(strings.Fields(RenderQuorumExpression(normalized))); err != nil {
+	rendered := RenderQuorumExpression(normalized)
+	reparsed, err := parseQuorumFields(strings.Fields(rendered))
+	if err != nil {
 		return nil, err
+	}
+	// The rendered form must re-normalize to a byte-identical tree, so the
+	// canonical text a bundle carries always recompiles to the same hash.
+	renormalized, err := normalizeQuorumExpressionAt(reparsed, 0)
+	if err != nil {
+		return nil, err
+	}
+	if RenderQuorumExpression(renormalized) != rendered {
+		return nil, fmt.Errorf("%w: quorum expression does not round-trip", ErrInvalidSyntax)
 	}
 	return normalized, nil
 }
@@ -1298,21 +1319,66 @@ func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*Quor
 		}
 		return &QuorumExpression{Kind: "not", Expr: expr}, nil
 	case "and", "or":
-		left, err := normalizeQuorumExpressionAt(expression.Left, depth+1)
+		op := normalizeIdentifier(expression.Kind)
+		// Flatten the maximal chain of this same operator into a list of
+		// operands, sort them by rendered form, and rebuild a single
+		// left-associative tree. `&` and `|` are associative and commutative,
+		// so `a & (b & c)`, `(a & b) & c`, and `c & a & b` must all normalize
+		// to one canonical tree — otherwise the flat rendered text (which
+		// carries no grouping) would re-parse (left-associative) to a
+		// different tree and a different hash, breaking round-trip
+		// verification.
+		operands, err := flattenQuorumChain(expression, op, depth)
 		if err != nil {
 			return nil, err
 		}
-		right, err := normalizeQuorumExpressionAt(expression.Right, depth+1)
-		if err != nil {
-			return nil, err
+		keyed := make([]struct {
+			node *QuorumExpression
+			key  string
+		}, len(operands))
+		for i, operand := range operands {
+			keyed[i] = struct {
+				node *QuorumExpression
+				key  string
+			}{operand, RenderQuorumExpression(operand)}
 		}
-		if RenderQuorumExpression(right) < RenderQuorumExpression(left) {
-			left, right = right, left
+		sort.SliceStable(keyed, func(i, j int) bool { return keyed[i].key < keyed[j].key })
+		node := keyed[0].node
+		for _, k := range keyed[1:] {
+			node = &QuorumExpression{Kind: op, Left: node, Right: k.node}
 		}
-		return &QuorumExpression{Kind: normalizeIdentifier(expression.Kind), Left: left, Right: right}, nil
+		return node, nil
 	default:
 		return nil, fmt.Errorf("%w: invalid quorum expression kind %q", ErrInvalidSyntax, expression.Kind)
 	}
+}
+
+// flattenQuorumChain collects the operands of a maximal chain of one
+// associative operator (`and` or `or`), normalizing each operand that is
+// not itself that same operator. Nested same-operator nodes are folded
+// in so `a & (b & c)` yields the operand list [a, b, c] regardless of the
+// authored grouping.
+func flattenQuorumChain(expression *QuorumExpression, op string, depth int) ([]*QuorumExpression, error) {
+	if depth > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
+	}
+	var operands []*QuorumExpression
+	for _, child := range []*QuorumExpression{expression.Left, expression.Right} {
+		if child != nil && normalizeIdentifier(child.Kind) == op {
+			nested, err := flattenQuorumChain(child, op, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			operands = append(operands, nested...)
+			continue
+		}
+		normalized, err := normalizeQuorumExpressionAt(child, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		operands = append(operands, normalized)
+	}
+	return operands, nil
 }
 
 func QuorumExpressionSubjects(expression *QuorumExpression) []string {
@@ -1343,34 +1409,50 @@ func QuorumExpressionSubjects(expression *QuorumExpression) []string {
 }
 
 func RenderQuorumExpression(expression *QuorumExpression) string {
+	var b strings.Builder
+	renderQuorumInto(&b, expression)
+	return b.String()
+}
+
+// renderQuorumInto writes the rendered form into b in a single pass, so
+// rendering a whole expression is O(nodes) rather than the O(n^2) that
+// repeated `left + op + right` concatenation would cost.
+func renderQuorumInto(b *strings.Builder, expression *QuorumExpression) {
 	if expression == nil {
-		return ""
+		return
 	}
 	switch expression.Kind {
 	case "subject":
-		return expression.Name
+		b.WriteString(expression.Name)
 	case "not":
-		inner := RenderQuorumExpression(expression.Expr)
+		b.WriteByte('!')
 		if expression.Expr != nil && (expression.Expr.Kind == "and" || expression.Expr.Kind == "or") {
-			return "!(" + inner + ")"
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Expr)
+			b.WriteByte(')')
+			return
 		}
-		return "!" + inner
+		renderQuorumInto(b, expression.Expr)
 	case "and", "or":
 		op := " & "
 		if expression.Kind == "or" {
 			op = " | "
 		}
-		left := RenderQuorumExpression(expression.Left)
-		right := RenderQuorumExpression(expression.Right)
 		if expression.Left != nil && expression.Kind == "and" && expression.Left.Kind == "or" {
-			left = "(" + left + ")"
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Left)
+			b.WriteByte(')')
+		} else {
+			renderQuorumInto(b, expression.Left)
 		}
-		if expression.Right != nil && (expression.Right.Kind == "or" && expression.Kind == "and") {
-			right = "(" + right + ")"
+		b.WriteString(op)
+		if expression.Right != nil && expression.Right.Kind == "or" && expression.Kind == "and" {
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Right)
+			b.WriteByte(')')
+		} else {
+			renderQuorumInto(b, expression.Right)
 		}
-		return left + op + right
-	default:
-		return ""
 	}
 }
 
