@@ -31,6 +31,7 @@ positioned at the offending line where the compiler can attribute one.
 | `CRL208` | A `block` field named like an expiry flag (`*expired*`, `*_expires`) — an active blocker reports `BLOCKED`, never `EXPIRED`; declare a signal expiry or use a temporal predicate for expiry semantics |
 | `CRL209` | A signal is declared but never referenced by a `need`, `block`, `quorum`, or temporal predicate — it does not affect the decision, so dropping the predicate that used it silently removes a requirement or blocker |
 | `CRL210` | An unindented `need`/`block`/`quorum` after a rule body was scoped INTO that rule by the rule-body carve-out; to declare a global final policy, put it before the rules |
+| `CRL211` | A quorum counts two or more collectors that read the same `source`; collectors sharing a source are not independent, so the count overstates how many distinct sources corroborate |
 
 ## Editor integration
 
