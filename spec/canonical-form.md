@@ -52,9 +52,12 @@ Compilation normalizes the object model before rendering or hashing:
 
 The canonical text is a complete CRL source rendered from the
 normalized bundle with a fixed layout: the `crl v1` header, `package`
-and `bundle` lines when present, then each rule (tab-indented body,
-signals nested under their collectors), each cluster, and any global
-predicates. The canonical text of a bundle:
+and `bundle` lines when present, then any global predicates, then each
+rule (tab-indented body, signals nested under their collectors), then
+each cluster. Global predicates render *before* the rules: emitted after
+a rule body they would sit at column 0 following it, where the rule-body
+carve-out would absorb them into that rule and the text would no longer
+re-compile to itself. The canonical text of a bundle:
 
 - re-compiles, and re-compiles **to itself** (formatting is a fixed
   point);
