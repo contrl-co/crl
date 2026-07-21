@@ -25,9 +25,13 @@ Compilation normalizes the object model before rendering or hashing:
 
 - identifiers (names, kinds, targets, fields, units, packages, bundle
   names) are lowercased and trimmed;
+- every string on the hash path — identifiers, string literals,
+  collector sources, signal source fields — is folded to Unicode NFC,
+  and invalid UTF-8 is rejected, so a program's bytes are fixed before
+  it is hashed;
 - the version is always the canonical `crl/v1`;
-- string values keep their exact content; source locators are rendered
-  bare when they match `[A-Za-z0-9_./:@?-]+` and quoted otherwise;
+- source locators are rendered bare when they match
+  `[A-Za-z0-9_./:@?-]+` and quoted otherwise;
 - durations are lowercased and re-derived from their literal
   (`ttl 24h` stays `24h`; it is not converted to seconds in the text,
   but its second count is fixed in the compiled form);
@@ -60,17 +64,28 @@ predicates. The canonical text of a bundle:
 ## Canonical JSON and the bundle hash
 
 The bundle hash is the hex-encoded SHA-256 of a canonical JSON
-encoding of the compiled bundle. The encoding is fixed:
+encoding of the compiled bundle. The encoding is
+[RFC 8785 (JSON Canonicalization Scheme)](https://www.rfc-editor.org/rfc/rfc8785)
+for the values CRL produces:
 
-- object keys sorted lexicographically at every level;
+- object keys sorted lexicographically at every level (RFC 8785 orders
+  by UTF-16 code units; every object key CRL emits is a fixed ASCII
+  schema key, where UTF-16, UTF-8, and code-point order all coincide);
 - no whitespace between tokens;
-- integers preserved at full precision (no float64 round-trip);
-- all strings normalized to Unicode NFC before serialization, so
-  visually identical strings with different codepoint sequences hash
-  identically;
+- numbers are IEEE-754 double precision — CRL has a single numeric type
+  and integers larger than 2^53 are not representable exactly;
+- strings are emitted verbatim, with no HTML escaping of `<`, `>`, or
+  `&`;
 - duplicate object keys rejected outright — two inputs that differ
   only in duplicate-key content must never canonicalize to the same
   bytes.
+
+Unicode normalization is **not** performed by the encoder. The compiler
+folds every hashed string to Unicode NFC and rejects invalid UTF-8
+*before* the bundle is hashed (see Canonicalization above), so the bytes
+that are hashed are exactly the bytes the evaluator compares — a hash
+identifies one program. Normalizing inside the encoder instead would let
+two programs that decide differently share a hash.
 
 The compiled-bundle document that gets encoded contains: the version,
 optional package and bundle names, the rules (name, target,
@@ -83,9 +98,10 @@ never reach the hash.
 
 - **Audit**: a decision record can pin the exact rule content by hash;
   anyone can recompile published source and check the hash matches.
-- **Anti-drift**: two independently built toolchains (or the same
-  toolchain on different platforms) must agree byte-for-byte; CI
-  compiles a golden corpus on every runner platform and fails on any
-  hash difference.
+- **Anti-drift**: because the encoding is RFC 8785, an independent
+  implementation in any language can reproduce the bundle hash from the
+  published source; two toolchains (or the same one on different
+  platforms) agree byte-for-byte. CI compiles a golden corpus and fails
+  on any hash difference.
 - **Dedup/identity**: a bundle's identity is its content, not its
   file name or formatting.
