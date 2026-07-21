@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-
-	"golang.org/x/text/unicode/norm"
 )
 
 // ErrDuplicateKey is returned by CanonicalJSON when an input JSON
@@ -31,16 +29,20 @@ var ErrDuplicateKey = errors.New("canonical json: duplicate key")
 //   - Integers are preserved at full precision (no round-trip through
 //     float64).
 //   - Duplicate object keys in the input are rejected (ErrDuplicateKey).
-//   - All string values are normalised to Unicode Normalization Form C
-//     (NFC) before serialisation, so visually-identical strings with
-//     different codepoint sequences hash to the same bytes.
+//   - Strings are not normalized and not HTML-escaped. They are NOT
+//     emitted verbatim: json.Marshal replaces invalid UTF-8 with U+FFFD,
+//     so distinct invalid inputs still collide here. Reject invalid UTF-8
+//     upstream.
+//
+// This is RFC 8785 for the inputs CRL produces. Callers hashing text must
+// normalize it first, in the layer that also compares it; normalizing here
+// would let two different programs share a hash.
 //
 // The function deliberately goes through json.Marshal first so that
 // struct tags, embedded fields, and time.Time formatting all match the
 // wire format the rest of the codebase uses. Then it streams the
 // intermediate bytes through a duplicate-key-detecting decoder, builds
-// an owned JSON value tree, and re-encodes the tree with sorted keys
-// and NFC-normalised strings.
+// an owned JSON value tree, and re-encodes the tree with sorted keys.
 //
 // The input MUST NOT contain cycles or non-JSON-serialisable values.
 func CanonicalJSON(value any) ([]byte, error) {
@@ -95,8 +97,6 @@ func DigestBytes(body []byte) string {
 //
 //   - Object keys are checked for duplication — ErrDuplicateKey on
 //     any repeat at any level of nesting.
-//   - String values are NFC-normalised as they land in the tree so
-//     the canonical encoder sees a single form.
 //
 // json.Decoder.Token() yields a stream of JSON tokens; decodeStrict
 // consumes them recursively to build the value.
@@ -120,7 +120,7 @@ func decodeValue(dec *json.Decoder, tok json.Token) (any, error) {
 			return nil, fmt.Errorf("unexpected delimiter %q", t)
 		}
 	case string:
-		return norm.NFC.String(t), nil
+		return t, nil
 	case json.Number:
 		return t, nil
 	case bool:
@@ -148,11 +148,8 @@ func decodeObject(dec *json.Decoder) (map[string]any, error) {
 		if !ok {
 			return nil, fmt.Errorf("expected object key, got %T", keyTok)
 		}
-		// Normalise the key itself so visually-equal keys collide
-		// correctly in the dup check.
-		normalisedKey := norm.NFC.String(key)
-		if _, dup := out[normalisedKey]; dup {
-			return nil, fmt.Errorf("%w: %q", ErrDuplicateKey, normalisedKey)
+		if _, dup := out[key]; dup {
+			return nil, fmt.Errorf("%w: %q", ErrDuplicateKey, key)
 		}
 		valueTok, err := dec.Token()
 		if err != nil {
@@ -162,7 +159,7 @@ func decodeObject(dec *json.Decoder) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		out[normalisedKey] = value
+		out[key] = value
 	}
 }
 
@@ -188,9 +185,8 @@ func decodeArray(dec *json.Decoder) ([]any, error) {
 
 // encodeCanonical walks a JSON value tree (the result of decodeStrict)
 // and writes the canonical form to out. Maps are serialised with keys
-// sorted lexicographically; arrays preserve their order; scalars are
-// delegated to json.Marshal so Go's default string/number/bool
-// rendering is used.
+// sorted lexicographically; arrays preserve their order; strings go
+// through encodeString so no HTML escaping reaches the hashed bytes.
 func encodeCanonical(out *bytes.Buffer, value any) error {
 	switch v := value.(type) {
 	case nil:
@@ -207,11 +203,9 @@ func encodeCanonical(out *bytes.Buffer, value any) error {
 			if i > 0 {
 				out.WriteByte(',')
 			}
-			encoded, err := json.Marshal(k)
-			if err != nil {
+			if err := encodeString(out, k); err != nil {
 				return err
 			}
-			out.Write(encoded)
 			out.WriteByte(':')
 			if err := encodeCanonical(out, v[k]); err != nil {
 				return err
@@ -235,12 +229,7 @@ func encodeCanonical(out *bytes.Buffer, value any) error {
 		out.WriteString(v.String())
 		return nil
 	case string:
-		encoded, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		out.Write(encoded)
-		return nil
+		return encodeString(out, v)
 	case bool:
 		if v {
 			out.WriteString("true")
@@ -254,4 +243,18 @@ func encodeCanonical(out *bytes.Buffer, value any) error {
 		// that survived json.Marshal. Keep the error for robustness.
 		return fmt.Errorf("canonical json: unsupported type %T", v)
 	}
+}
+
+// encodeString writes a JSON string with HTML escaping disabled;
+// json.Marshal would escape <, > and & inside the hashed bytes.
+func encodeString(out *bytes.Buffer, value string) error {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return err
+	}
+	// json.Encoder.Encode appends a newline that is not part of the value.
+	out.Write(bytes.TrimSuffix(buf.Bytes(), []byte("\n")))
+	return nil
 }

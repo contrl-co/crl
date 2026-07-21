@@ -193,65 +193,51 @@ func TestCanonicalJSONRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
-// TestCanonicalJSONNormalizesUnicode verifies the NFC equivalence part
-// of . "é" (U+00E9) and "e" + U+0301 (combining acute accent) are
-// visually identical but consist of different codepoint sequences; any
-// hash-over-canonical-json scheme that does NOT normalise would hash
-// them to different digests. After NFC normalisation the two forms
-// canonicalise to the exact same bytes.
-func TestCanonicalJSONNormalizesUnicode(t *testing.T) {
-	// String-valued case.
-	a := map[string]any{"name": "\u00e9"}             // "é" precomposed
-	b := map[string]any{"name": "e\u0301"}            // "e" + combining acute
-	c := map[string]any{"name": "\u006e\u0303\u00e9"} // not a match, sanity check
+// Distinct bytes are distinct programs: canonicalisation must not merge them.
+// Normalisation happens in crl.normalizeBundle, which also executes the value.
+func TestCanonicalJSONPreservesUnicodeBytes(t *testing.T) {
+	precomposed := map[string]any{"name": "é"}
+	decomposed := map[string]any{"name": "é"}
 
-	canonA, err := CanonicalJSON(a)
+	canonPre, err := CanonicalJSON(precomposed)
 	if err != nil {
-		t.Fatalf("CanonicalJSON(a): %v", err)
+		t.Fatalf("CanonicalJSON(precomposed): %v", err)
 	}
-	canonB, err := CanonicalJSON(b)
+	canonDec, err := CanonicalJSON(decomposed)
 	if err != nil {
-		t.Fatalf("CanonicalJSON(b): %v", err)
+		t.Fatalf("CanonicalJSON(decomposed): %v", err)
 	}
-	canonC, err := CanonicalJSON(c)
-	if err != nil {
-		t.Fatalf("CanonicalJSON(c): %v", err)
+	if string(canonPre) == string(canonDec) {
+		t.Fatalf("distinct inputs share a canonical form -- the forgery is back: %s", canonPre)
 	}
 
-	if string(canonA) != string(canonB) {
-		t.Fatalf("NFC equivalence failed:\n  a: %s\n  b: %s", string(canonA), string(canonB))
-	}
-	if string(canonA) == string(canonC) {
-		t.Fatal("sanity check failed: unrelated string should not equal NFC-normalised one")
-	}
-
-	// Key-valued case — keys are also normalised.
-	ka := map[string]any{"caf\u00e9": 1}  // "café" precomposed
-	kb := map[string]any{"cafe\u0301": 1} // "café" decomposed
-	canKA, err := CanonicalJSON(ka)
+	// Keys are bytes too: two NFC-equivalent keys are two keys.
+	keys := json.RawMessage(`{"café":1,"café":2}`)
+	canonKeys, err := CanonicalJSON(keys)
 	if err != nil {
-		t.Fatalf("CanonicalJSON(ka): %v", err)
+		t.Fatalf("CanonicalJSON(NFC-equivalent keys): %v", err)
 	}
-	canKB, err := CanonicalJSON(kb)
-	if err != nil {
-		t.Fatalf("CanonicalJSON(kb): %v", err)
-	}
-	if string(canKA) != string(canKB) {
-		t.Fatalf("NFC key normalisation failed:\n  ka: %s\n  kb: %s", string(canKA), string(canKB))
+	// Sorted by UTF-8 bytes: the decomposed key leads, because 0x65 < 0xc3.
+	if want := "{\"cafe\u0301\":2,\"caf\u00e9\":1}"; string(canonKeys) != want {
+		t.Fatalf("NFC-equivalent keys must stay distinct:\n  got:  %s\n  want: %s", canonKeys, want)
 	}
 }
 
-// TestCanonicalJSONNFCKeyCollisionIsDuplicate verifies that two keys
-// that are byte-different but NFC-equal collapse to the same key in
-// the canonical form and trigger ErrDuplicateKey rather than silently
-// winning-last.
-func TestCanonicalJSONNFCKeyCollisionIsDuplicate(t *testing.T) {
-	// Precomposed "café" and decomposed "café" as distinct keys in
-	// the same object must be rejected as duplicates once the keys
-	// are NFC-normalised.
-	raw := json.RawMessage(`{"caf\u00e9":1,"cafe\u0301":2}`)
-	_, err := CanonicalJSON(raw)
-	if !errors.Is(err, ErrDuplicateKey) {
-		t.Fatalf("expected ErrDuplicateKey for NFC-equivalent keys, got %v", err)
+func TestCanonicalJSONDuplicateKeyIsRejected(t *testing.T) {
+	raw := json.RawMessage(`{"café":1,"café":2}`)
+	if _, err := CanonicalJSON(raw); !errors.Is(err, ErrDuplicateKey) {
+		t.Fatalf("expected ErrDuplicateKey for identical keys, got %v", err)
+	}
+}
+
+// `quorum N of M` lowers to the operator ">=", so HTML escaping would reach
+// every bundle's hash and no other implementation could reproduce it.
+func TestCanonicalJSONDoesNotHTMLEscape(t *testing.T) {
+	got, err := CanonicalJSON(map[string]any{"operator": ">=", "source": "/b?a=1&b=2"})
+	if err != nil {
+		t.Fatalf("CanonicalJSON: %v", err)
+	}
+	if want := `{"operator":">=","source":"/b?a=1&b=2"}`; string(got) != want {
+		t.Fatalf("HTML escaping reached the hashed bytes:\n  got:  %s\n  want: %s", got, want)
 	}
 }
