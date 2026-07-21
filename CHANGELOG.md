@@ -48,9 +48,13 @@ weekly; the v1 edition's compilation contract does not change (see
 - Newly rejected (each could previously produce a misleading or unsafe
   bundle): duplicate `target`, `package`, `bundle`, and cluster `rules`
   statements; a `count()` threshold above the subject count; a
-  block-only or otherwise inverting global final policy (one that
-  authorizes when a rule fails, e.g. `quorum not r`); invalid UTF-8 and
+  block-only or otherwise inverting global final policy — one that
+  gates on a rule or cluster failing (`quorum not r`, `block r`,
+  `need r == false`, `r & !r2`), which would authorize with no evidence; invalid UTF-8 and
   oversized source.
+- Integer literals above 2^53 (including magnitudes that overflow
+  int64) are rejected rather than silently rounded to a different
+  threshold.
 - A millisecond duration now converts to real seconds (rounded up):
   `60000ms` is `60s`, where it was previously treated as `1s` — which
   under-satisfied an `age >=` requirement.
