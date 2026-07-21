@@ -1085,6 +1085,20 @@ func subjectValuePresent(facts Facts, subject string) bool {
 }
 
 func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
+	expr, err := parseQuorumFields(fields)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeQuorumExpression(expr)
+}
+
+// parseQuorumFields tokenizes and parses a quorum expression under the
+// text-path limits (token count and nesting depth) WITHOUT normalizing.
+// It is the shared validator both entry points use: the text path parses
+// through it, and normalizeQuorumExpression trial-parses a struct-built
+// expression's rendered form through it, so both paths accept exactly the
+// same set of expressions.
+func parseQuorumFields(fields []string) (*QuorumExpression, error) {
 	tokens := quorumTokens(fields)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
@@ -1100,7 +1114,7 @@ func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
 	if parser.pos != len(tokens) {
 		return nil, fmt.Errorf("%w: unexpected quorum token %q", ErrInvalidSyntax, tokens[parser.pos])
 	}
-	return normalizeQuorumExpression(expr)
+	return expr, nil
 }
 
 func quorumTokens(fields []string) []string {
@@ -1239,10 +1253,28 @@ func (p *quorumParser) match(token string) bool {
 }
 
 func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression, error) {
-	// depth is bounded by maxQuorumTokens: the text parser caps token count,
-	// so a tree deeper than that can only come from a caller-built struct via
-	// CompileBundleProgram, which would otherwise overflow this recursion.
-	return normalizeQuorumExpressionAt(expression, 0)
+	// The recursion depth here is bounded by maxQuorumTokens so a
+	// caller-built struct (via CompileBundleProgram) that is deeper than any
+	// text-parseable expression cannot overflow this recursion.
+	normalized, err := normalizeQuorumExpressionAt(expression, 0)
+	if err != nil {
+		return nil, err
+	}
+	// A struct-built expression may normalize cleanly here yet still render
+	// to canonical text the text parser would reject — the struct recursion
+	// counts tree nodes, while the text parser bounds token count and paren
+	// nesting, which are different quantities for the same tree. If that
+	// happened the compiler would emit canonical text it then refuses to
+	// recompile, breaking hash re-verification. Guard against it by
+	// trial-parsing the rendered form through the exact text-path validator.
+	// For the text path this is a redundant no-op (normalization only ever
+	// removes tokens and parens), so it never rejects a text-accepted input.
+	// strings.Fields mirrors how the lexer splits the rendered text into the
+	// whitespace-separated fields quorumTokens expects.
+	if _, err := parseQuorumFields(strings.Fields(RenderQuorumExpression(normalized))); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*QuorumExpression, error) {
