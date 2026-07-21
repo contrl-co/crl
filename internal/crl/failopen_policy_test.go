@@ -52,3 +52,25 @@ func TestSignalNegationAllowedInFinalPolicy(t *testing.T) {
 		t.Fatalf("negating a signal in the final policy must compile: %v", err)
 	}
 }
+
+// An inversion hidden in a cluster predicate must be rejected too: a
+// cluster publishes a boolean the final policy consumes positively, so a
+// cluster gating on a rule failing authorizes with that rule's evidence
+// absent, exactly as a global inversion would.
+func TestClusterInternalInversionRejected(t *testing.T) {
+	twoRules := "rule keeper\n\ttarget t.k\n\tcollector ck prov api from /b/k.json\n\t\tsignal k_ok bool from k.ok ttl 30d\n\tneed k_ok == true\n\tquorum ck\nrule danger\n\ttarget t.d\n\tcollector cd prov api from /b/d.json\n\t\tsignal d_ok bool from d.ok ttl 30d\n\tneed d_ok == true\n\tquorum cd\n"
+	for _, clusterPred := range []string{"block danger", "need danger == false", "need danger != true", "quorum keeper & !danger"} {
+		src := "crl v1\npackage p\nbundle b\n" + twoRules +
+			"cluster gate\n\trules keeper\n\t" + clusterPred + "\nneed gate == true\nquorum gate | danger\n"
+		if _, err := CompileBundle(src); err == nil {
+			t.Errorf("cluster inversion %q must be rejected", clusterPred)
+		}
+	}
+}
+
+func TestLegitimateClusterCompiles(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\nrule keeper\n\ttarget t.k\n\tcollector ck prov api from /b/k.json\n\t\tsignal ok bool from k.ok ttl 30d\n\tneed ok == true\n\tquorum ck\ncluster gate\n\trules keeper\n\tneed keeper == true\nneed gate == true\nquorum gate\n"
+	if _, err := CompileBundle(src); err != nil {
+		t.Fatalf("a positive cluster policy must compile: %v", err)
+	}
+}

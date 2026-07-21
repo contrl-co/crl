@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -582,20 +583,23 @@ func parseValue(raw string) (Value, error) {
 	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 		return Value{}, fmt.Errorf("%w: invalid literal %q", ErrInvalidSyntax, raw)
 	}
-	// Reject an integer literal beyond the range float64 (the number type)
-	// represents exactly. Silently rounding `== 9007199254740993` to ...992
+	// Reject an integer literal that float64 (the number type) cannot
+	// represent exactly. Silently rounding `== 9007199254740993` to ...992
 	// would alter a threshold — a real hazard for a governance language
 	// comparing large amounts — and give two distinct literals one hash.
-	// Fractions are inherently approximate and allowed; an integer is a
-	// literal with no fraction or exponent. Deciding integer-ness
-	// syntactically (rather than by whether ParseInt succeeds) also catches
-	// magnitudes above 2^63, which overflow int64 and would otherwise slip
-	// past the check.
-	const maxSafeInteger = 1 << 53
+	// The test is exact representability, NOT a magnitude threshold: many
+	// large round values (10^18, one ETH in wei) ARE exact and must
+	// compile, and the canonical text renders them as plain integers that
+	// have to recompile. An integer literal is one with no fraction or
+	// exponent; fractions are inherently approximate and allowed.
 	if !strings.ContainsAny(raw, ".eE") {
-		intLit, convErr := strconv.ParseInt(raw, 10, 64)
-		if convErr != nil || intLit > maxSafeInteger || intLit < -maxSafeInteger {
-			return Value{}, fmt.Errorf("%w: integer %q exceeds the exact range (magnitude above 2^53 loses precision)", ErrInvalidSyntax, raw)
+		want, ok := new(big.Int).SetString(raw, 10)
+		if !ok {
+			return Value{}, fmt.Errorf("%w: invalid integer %q", ErrInvalidSyntax, raw)
+		}
+		got, _ := big.NewFloat(n).Int(nil)
+		if got.Cmp(want) != 0 {
+			return Value{}, fmt.Errorf("%w: integer %q is not exactly representable (it would round to a different value)", ErrInvalidSyntax, raw)
 		}
 	}
 	// Normalize negative zero to zero so `-0` and `0` share one canonical
