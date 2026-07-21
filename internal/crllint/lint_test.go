@@ -322,3 +322,63 @@ func TestLintFlagsCarvedOutGlobalPredicate(t *testing.T) {
 		t.Fatalf("expected CRL210 for the carved-out predicate, got %#v", report.Diagnostics)
 	}
 }
+
+func TestLintFlagsCountQuorumOverSameSource(t *testing.T) {
+	report := LintSource("dup.crl", `crl v1
+package t
+bundle t.dup
+
+rule r
+    target t.dup
+    collector a municipality file_upload from /bundles/same.json
+        signal sa bool from x.a ttl 30d
+    collector b land_registry api from /bundles/same.json
+        signal sb bool from x.b ttl 30d
+    need sa == true
+    quorum 2 of 2 a b
+`, Options{})
+	if !report.OK {
+		t.Fatalf("report.OK = false, diagnostics = %#v", report.Diagnostics)
+	}
+	if !hasDiagnostic(report, "CRL211", SeverityWarning) {
+		t.Fatalf("expected CRL211 for two collectors sharing a source, got %#v", report.Diagnostics)
+	}
+}
+
+func TestLintFlagsBooleanQuorumOverSameSource(t *testing.T) {
+	report := LintSource("dupbool.crl", `crl v1
+package t
+bundle t.dup
+
+rule r
+    target t.dup
+    collector a municipality file_upload from /bundles/same.json
+        signal sa bool from x.a ttl 30d
+    collector b land_registry api from /bundles/same.json
+        signal sb bool from x.b ttl 30d
+    need sa == true
+    quorum a & b
+`, Options{})
+	if !hasDiagnostic(report, "CRL211", SeverityWarning) {
+		t.Fatalf("expected CRL211 for a boolean quorum over one source, got %#v", report.Diagnostics)
+	}
+}
+
+func TestLintAllowsQuorumOverDistinctSources(t *testing.T) {
+	report := LintSource("ok.crl", `crl v1
+package t
+bundle t.ok
+
+rule r
+    target t.ok
+    collector a municipality file_upload from /bundles/a.json
+        signal sa bool from x.a ttl 30d
+    collector b land_registry api from /bundles/b.json
+        signal sb bool from x.b ttl 30d
+    need sa == true
+    quorum 2 of 2 a b
+`, Options{})
+	if hasDiagnostic(report, "CRL211", SeverityWarning) {
+		t.Fatalf("did not expect CRL211 for distinct sources, got %#v", report.Diagnostics)
+	}
+}

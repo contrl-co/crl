@@ -117,6 +117,12 @@ Use count quorum when more than one independent evidence source can
 support the same authorization. `quorum 2 of 3 a b c` is equivalent
 sugar.
 
+The count is only honest when the collectors are genuinely distinct
+sources. Two collectors that read the **same** `source` do not
+corroborate independently — counting both overstates how many separate
+sources agree. The linter flags this as **CRL211**; give each
+independent input its own source, or count only over distinct sources.
+
 ## Object-block style
 
 ```crl
