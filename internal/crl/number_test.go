@@ -38,3 +38,31 @@ func TestNegativeZeroNormalizes(t *testing.T) {
 		t.Fatal("-0 must canonicalize identically to 0")
 	}
 }
+
+// Exact-representability, not a magnitude threshold: a large round value
+// that float64 represents exactly (10^18 = one ETH in wei) must compile
+// and its canonical text must recompile; a value that would round must be
+// rejected.
+func TestExactLargeIntegersCompileAndRoundTrip(t *testing.T) {
+	src := func(v string) string {
+		return "crl v1\npackage n\nbundle n\nrule r\n\ttarget t.r\n\tcollector c org api from /x.json\n\t\tsignal s number from x ttl 30d\n\tneed s >= " + v + "\n\tquorum c\n"
+	}
+	for _, exact := range []string{"1000000000000000000", "10000000000000000000", "1e18", "9007199254740992"} {
+		compiled, err := CompileBundle(src(exact))
+		if err != nil {
+			t.Fatalf("exact value %q must compile: %v", exact, err)
+		}
+		re, err := CompileBundle(compiled.CanonicalText)
+		if err != nil {
+			t.Fatalf("exact value %q canonical text must recompile: %v", exact, err)
+		}
+		if re.Hash != compiled.Hash {
+			t.Errorf("exact value %q must round-trip", exact)
+		}
+	}
+	for _, inexact := range []string{"9007199254740993", "100000000000000000000000"} {
+		if _, err := CompileBundle(src(inexact)); err == nil {
+			t.Errorf("inexact value %q must be rejected", inexact)
+		}
+	}
+}

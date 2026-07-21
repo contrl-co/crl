@@ -244,9 +244,6 @@ var finalPolicyProbeClock = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 // evaluate to false while a supplier who provides r's evidence and
 // withholds r2's still authorizes.
 func validateFinalPolicyMonotone(bundle Bundle) error {
-	if len(bundle.Predicates) == 0 {
-		return nil
-	}
 	ruleOrCluster := map[string]struct{}{}
 	for _, rule := range bundle.Rules {
 		ruleOrCluster[rule.Name] = struct{}{}
@@ -258,10 +255,41 @@ func validateFinalPolicyMonotone(bundle Bundle) error {
 		_, ok := ruleOrCluster[normalizeIdentifier(name)]
 		return ok
 	}
-	inverted := func(field string) error {
-		return fmt.Errorf("%w: global final policy gates on rule or cluster %q failing; a rule or cluster may only be required positively, never negated, blocked, or required false", ErrInvalidSyntax, field)
+	// Cluster predicates are checked too, not just the global final policy:
+	// a cluster publishes a boolean the policy consumes positively, and a
+	// cluster predicate may reference any rule, so an inversion hidden in a
+	// cluster (`cluster g { rules keeper; block danger }`) reaches
+	// authorization exactly as a global inversion would.
+	for _, cluster := range bundle.Clusters {
+		if err := monotoneInRulesAndClusters(cluster.Predicates, isRuleOrCluster, "cluster "+cluster.Name); err != nil {
+			return err
+		}
 	}
-	for _, predicate := range bundle.Predicates {
+	if len(bundle.Predicates) == 0 {
+		return nil
+	}
+	if err := monotoneInRulesAndClusters(bundle.Predicates, isRuleOrCluster, "global final policy"); err != nil {
+		return err
+	}
+	// Secondary net: a sound final policy must also withhold on empty facts,
+	// since no rule or cluster can authorize without evidence. This catches
+	// any inverting shape the structural walk above does not enumerate.
+	probe := EvaluateBundleAt(CompiledBundle{Program: bundle}, Facts{}, finalPolicyProbeClock)
+	if probe.Authorized {
+		return fmt.Errorf("%w: global final policy authorizes with no evidence; it must require positive proof (a rule, cluster, or signal holding)", ErrInvalidSyntax)
+	}
+	return nil
+}
+
+// monotoneInRulesAndClusters rejects a predicate set that gates on a rule
+// or cluster FAILING — a negated, blocked, or required-false reference to
+// one. Such a reference is satisfied when its evidence is absent, so it
+// authorizes with no evidence. Signals may be negated freely.
+func monotoneInRulesAndClusters(predicates []Predicate, isRuleOrCluster func(string) bool, scope string) error {
+	inverted := func(field string) error {
+		return fmt.Errorf("%w: %s gates on rule or cluster %q failing; a rule or cluster may only be required positively, never negated, blocked, or required false", ErrInvalidSyntax, scope, field)
+	}
+	for _, predicate := range predicates {
 		switch predicate.Kind {
 		case PredicateBlock:
 			// block passes when the field is false; blocking a rule or
@@ -282,13 +310,6 @@ func validateFinalPolicyMonotone(bundle Bundle) error {
 			}
 			// Count-quorum providers count presence, always positive.
 		}
-	}
-	// Secondary net: a sound final policy must also withhold on empty facts,
-	// since no rule or cluster can authorize without evidence. This catches
-	// any inverting shape the structural walk above does not enumerate.
-	probe := EvaluateBundleAt(CompiledBundle{Program: bundle}, Facts{}, finalPolicyProbeClock)
-	if probe.Authorized {
-		return fmt.Errorf("%w: global final policy authorizes with no evidence; it must require positive proof (a rule, cluster, or signal holding)", ErrInvalidSyntax)
 	}
 	return nil
 }

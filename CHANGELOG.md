@@ -50,11 +50,12 @@ weekly; the v1 edition's compilation contract does not change (see
   statements; a `count()` threshold above the subject count; a
   block-only or otherwise inverting global final policy — one that
   gates on a rule or cluster failing (`quorum not r`, `block r`,
-  `need r == false`, `r & !r2`), which would authorize with no evidence; invalid UTF-8 and
+  `need r == false`, `r & !r2`, including inside a cluster's own
+  predicates), which would authorize with no evidence; invalid UTF-8 and
   oversized source.
-- Integer literals above 2^53 (including magnitudes that overflow
-  int64) are rejected rather than silently rounded to a different
-  threshold.
+- An integer literal that float64 cannot represent exactly is
+  rejected rather than silently rounded to a different threshold (a
+  large round value like 10^18 that is exact still compiles).
 - A millisecond duration now converts to real seconds (rounded up):
   `60000ms` is `60s`, where it was previously treated as `1s` — which
   under-satisfied an `age >=` requirement.
