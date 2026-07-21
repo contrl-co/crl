@@ -69,7 +69,9 @@ characters outside the unquoted source alphabet
 
 Numbers are finite decimals with an optional leading `-` and at most
 one decimal point. They are carried as 64-bit floating point; NaN and
-infinities are rejected.
+infinities are rejected, and an integer literal whose magnitude exceeds
+2^53 is rejected rather than silently rounded (so a large threshold can
+never be quietly altered). `-0` normalizes to `0`.
 
 ### Booleans
 
