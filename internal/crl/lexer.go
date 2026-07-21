@@ -272,9 +272,13 @@ func isOperatorRune(ch rune) bool {
 
 func isDelimiterRune(ch rune) bool {
 	switch ch {
-	case '{', '}', '(', ')', ',', '+':
+	case '{', '}', '(', ')', ',':
 		return true
 	default:
+		// '+' is NOT a mid-token delimiter: it must stay part of an RFC3339
+		// offset like 2026-12-31T23:59:59+05:30 (mirroring '-', which already
+		// is not a delimiter). A cluster-rule '+' is always space-separated,
+		// so the main lexer loop still tokenizes it on its own.
 		return false
 	}
 }

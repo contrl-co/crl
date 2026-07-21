@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -119,4 +120,30 @@ func firstErrorMessage(report LintReport) string {
 		}
 	}
 	return "unknown error"
+}
+
+// TestReadmeAdvertisedHashMatches pins the sha256 the README prints to what
+// its own crl example actually compiles to. The docs-lint gate only reads
+// crl fences, so the advertised hash — in an sh fence — would otherwise go
+// silently stale after an edition change.
+func TestReadmeAdvertisedHashMatches(t *testing.T) {
+	raw, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := crlBlocks(string(raw))
+	if len(blocks) == 0 {
+		t.Fatal("no crl block found in README.md")
+	}
+	compiled, err := Compile(blocks[0].source)
+	if err != nil {
+		t.Fatalf("README crl example does not compile: %v", err)
+	}
+	match := regexp.MustCompile(`sha256:([0-9a-f]{64})`).FindStringSubmatch(string(raw))
+	if match == nil {
+		t.Fatal("README.md advertises no sha256 hash")
+	}
+	if match[1] != compiled.Hash {
+		t.Fatalf("README advertises sha256:%s but its example compiles to %s", match[1], compiled.Hash)
+	}
 }

@@ -184,6 +184,91 @@ func addDocumentDiagnostics(document crl.Document, add *func(Diagnostic)) {
 	for _, predicate := range document.Predicates {
 		addBlockNamingDiagnostics(predicate, add)
 	}
+	for _, rule := range document.Rules {
+		for _, predicate := range rule.Predicates {
+			if predicate.CarvedOut {
+				(*add)(Diagnostic{
+					Line:     predicate.Span.Line,
+					Column:   predicate.Span.Column,
+					Severity: SeverityWarning,
+					Code:     "CRL210",
+					Message: fmt.Sprintf(
+						"unindented %q after rule %q was scoped INTO that rule by the rule-body carve-out; to declare a global final policy, put it before the rules",
+						predicate.Predicate.Kind, rule.Name,
+					),
+				})
+			}
+		}
+	}
+	addUnreferencedSignalDiagnostics(document, add)
+}
+
+// addUnreferencedSignalDiagnostics warns about a signal that no predicate
+// reads. Such a signal does not affect the decision, so dropping the one
+// predicate that used it — a plausible merge accident — silently removes a
+// blocker or requirement with nothing to flag it.
+func addUnreferencedSignalDiagnostics(document crl.Document, add *func(Diagnostic)) {
+	fold := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+	referenced := map[string]struct{}{}
+	mark := func(name string) {
+		if name = fold(name); name != "" {
+			referenced[name] = struct{}{}
+		}
+	}
+	markPredicate := func(predicate crl.Predicate) {
+		mark(predicate.Field)
+		for _, provider := range predicate.Providers {
+			mark(provider)
+		}
+		if predicate.Expression != nil {
+			for _, subject := range crl.QuorumExpressionSubjects(predicate.Expression) {
+				mark(subject)
+			}
+		}
+		if predicate.Temporal != nil {
+			mark(predicate.Temporal.Reference)
+		}
+	}
+	authoredRules := make([]crl.RuleObject, 0, len(document.Rules)+len(document.AbstractRules))
+	authoredRules = append(authoredRules, document.Rules...)
+	authoredRules = append(authoredRules, document.AbstractRules...)
+	for _, rule := range authoredRules {
+		for _, predicate := range rule.Predicates {
+			markPredicate(predicate.Predicate)
+		}
+	}
+	for _, cluster := range document.Clusters {
+		for _, predicate := range cluster.Predicates {
+			markPredicate(predicate.Predicate)
+		}
+	}
+	for _, predicate := range document.Predicates {
+		markPredicate(predicate.Predicate)
+	}
+	for _, rule := range authoredRules {
+		for _, collector := range rule.Collectors {
+			// A count quorum names a collector, not its signals; treat every
+			// signal of a referenced collector as used.
+			if _, ok := referenced[fold(collector.Name)]; ok {
+				continue
+			}
+			for _, signal := range collector.Signals {
+				if _, ok := referenced[fold(signal.Signal.Name)]; ok {
+					continue
+				}
+				(*add)(Diagnostic{
+					Line:     signal.Span.Line,
+					Column:   signal.Span.Column,
+					Severity: SeverityWarning,
+					Code:     "CRL209",
+					Message: fmt.Sprintf(
+						"signal %q is declared but never referenced by a need, block, quorum, or temporal predicate; it does not affect the decision",
+						signal.Signal.Name,
+					),
+				})
+			}
+		}
+	}
 }
 
 // addExpiryRoundingDiagnostics surfaces the silent canonicalisation in
