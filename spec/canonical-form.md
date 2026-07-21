@@ -64,21 +64,33 @@ predicates. The canonical text of a bundle:
 ## Canonical JSON and the bundle hash
 
 The bundle hash is the hex-encoded SHA-256 of a canonical JSON
-encoding of the compiled bundle. The encoding is
-[RFC 8785 (JSON Canonicalization Scheme)](https://www.rfc-editor.org/rfc/rfc8785)
-for the values CRL produces:
+encoding of the compiled bundle. The encoding is fixed and
+purpose-built — deliberately **not** a conformant RFC 8785 (JSON
+Canonicalization Scheme) implementation (see the note on numbers below):
 
-- object keys sorted lexicographically at every level (RFC 8785 orders
-  by UTF-16 code units; every object key CRL emits is a fixed ASCII
-  schema key, where UTF-16, UTF-8, and code-point order all coincide);
+- object keys sorted lexicographically at every level (by code point;
+  every object key CRL emits is a fixed ASCII schema key, so byte,
+  code-point, and UTF-16 order all coincide);
 - no whitespace between tokens;
-- numbers are IEEE-754 double precision — CRL has a single numeric type
-  and integers larger than 2^53 are not representable exactly;
+- numbers are emitted verbatim, exactly as the compiler renders them —
+  the encoder performs no ECMAScript/JCS number reformatting (`1.0`
+  stays `1.0`, `1e2` stays `1e2`). CRL's single numeric type is
+  IEEE-754 double, so an authored integer larger than 2^53 is not
+  representable exactly, while integer second-counts and thresholds are
+  emitted at full precision;
 - strings are emitted verbatim, with no HTML escaping of `<`, `>`, or
   `&`;
 - duplicate object keys rejected outright — two inputs that differ
   only in duplicate-key content must never canonicalize to the same
   bytes.
+
+CRL deliberately does not adopt RFC 8785/JCS: its number rule
+re-serializes values through the ECMAScript algorithm (for example
+`4.50` → `4.5`, `1E30` → `1e+30`), which would reformat values and fold
+distinct authored literals together. Hashing exactly what the compiler
+renders keeps one program's bytes fixed. The practical consequence is
+that the bundle hash is reproduced by following this specification (or
+reusing this toolchain), not by running an off-the-shelf JCS library.
 
 Unicode normalization is **not** performed by the encoder. The compiler
 folds every hashed string to Unicode NFC and rejects invalid UTF-8
@@ -98,10 +110,10 @@ never reach the hash.
 
 - **Audit**: a decision record can pin the exact rule content by hash;
   anyone can recompile published source and check the hash matches.
-- **Anti-drift**: because the encoding is RFC 8785, an independent
-  implementation in any language can reproduce the bundle hash from the
-  published source; two toolchains (or the same one on different
-  platforms) agree byte-for-byte. CI compiles a golden corpus and fails
-  on any hash difference.
+- **Anti-drift**: an independent implementation that follows this
+  canonicalization reproduces the bundle hash from the published
+  source; two toolchains (or the same one on different platforms) agree
+  byte-for-byte. CI compiles a golden corpus and fails on any hash
+  difference.
 - **Dedup/identity**: a bundle's identity is its content, not its
   file name or formatting.
