@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	"gitlab.com/contrl-group/crl/internal/crypto"
 )
 
@@ -493,10 +495,15 @@ func bundleSignalIndex(bundle Bundle) map[string]Signal {
 	return out
 }
 
+// Facts fold to NFC here because normalizeBundle folded the rule side; a
+// comparison against raw bytes would answer on spelling, not on evidence.
 func copyFacts(facts Facts) Facts {
 	out := make(Facts, len(facts))
 	for key, value := range facts {
-		out[key] = value
+		if text, ok := value.(string); ok {
+			value = norm.NFC.String(text)
+		}
+		out[norm.NFC.String(key)] = value
 	}
 	return out
 }

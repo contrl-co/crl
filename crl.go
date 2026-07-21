@@ -128,6 +128,13 @@ func (c Compiled) Evaluate(facts Facts) Evaluation {
 
 // EvaluateAt evaluates the bundle against facts at an explicit instant.
 func (c Compiled) EvaluateAt(facts Facts, now time.Time) Evaluation {
+	// program is unexported and set only by the compiler, so a zero-value,
+	// JSON-round-tripped, or otherwise hand-built Compiled carries an empty
+	// program that would authorize vacuously. Fail closed unless the program
+	// is the one this Compiled's hash addresses.
+	if c.program.Hash == "" || c.program.Hash != c.Hash {
+		return Evaluation{Result: InsufficientEvidence, Authorized: false}
+	}
 	return newEvaluation(lang.EvaluateBundleAt(c.program, facts, now))
 }
 
