@@ -1104,10 +1104,21 @@ func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
 }
 
 func quorumTokens(fields []string) []string {
-	var tokens []string
+	// Stop as soon as the token count passes the cap. parseQuorumExpression
+	// rejects a past-cap expression anyway, but materializing the whole slice
+	// first lets a pathological field (millions of nested parens) balloon
+	// memory before that check runs. Bounding the slice here keeps peak
+	// allocation at O(maxQuorumTokens) instead of O(input length).
+	tokens := make([]string, 0, 16)
+	appendToken := func(token string) bool {
+		tokens = append(tokens, token)
+		return len(tokens) > maxQuorumTokens
+	}
 	for _, field := range fields {
 		if alias := logicalFieldAlias(field); alias != field {
-			tokens = append(tokens, alias)
+			if appendToken(alias) {
+				return tokens
+			}
 			continue
 		}
 		var current strings.Builder
@@ -1115,16 +1126,22 @@ func quorumTokens(fields []string) []string {
 			switch char {
 			case '&', '|', '!', '(', ')':
 				if current.Len() > 0 {
-					tokens = append(tokens, current.String())
+					if appendToken(current.String()) {
+						return tokens
+					}
 					current.Reset()
 				}
-				tokens = append(tokens, string(char))
+				if appendToken(string(char)) {
+					return tokens
+				}
 			default:
 				current.WriteRune(char)
 			}
 		}
 		if current.Len() > 0 {
-			tokens = append(tokens, current.String())
+			if appendToken(current.String()) {
+				return tokens
+			}
 		}
 	}
 	return tokens
