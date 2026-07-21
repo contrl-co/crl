@@ -582,6 +582,20 @@ func parseValue(raw string) (Value, error) {
 	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 		return Value{}, fmt.Errorf("%w: invalid literal %q", ErrInvalidSyntax, raw)
 	}
+	// Reject an integer literal beyond the range float64 (the number type)
+	// represents exactly. Silently rounding `== 9007199254740993` to ...992
+	// would alter a threshold — a real hazard for a governance language
+	// comparing large amounts — and give two distinct literals one hash.
+	// Fractions are inherently approximate and allowed.
+	const maxSafeInteger = 1 << 53
+	if intLit, convErr := strconv.ParseInt(raw, 10, 64); convErr == nil && (intLit > maxSafeInteger || intLit < -maxSafeInteger) {
+		return Value{}, fmt.Errorf("%w: integer %q exceeds the exact range (magnitude above 2^53 loses precision)", ErrInvalidSyntax, raw)
+	}
+	// Normalize negative zero to zero so `-0` and `0` share one canonical
+	// form as well as one hash.
+	if n == 0 {
+		n = 0
+	}
 	return Value{Kind: "number", Number: n}, nil
 }
 
