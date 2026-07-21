@@ -249,13 +249,21 @@ func addUnreferencedSignalDiagnostics(document crl.Document, add *func(Diagnosti
 	}
 	for _, rule := range authoredRules {
 		for _, collector := range rule.Collectors {
-			// A count quorum names a collector, not its signals; treat every
-			// signal of a referenced collector as used.
-			if _, ok := referenced[fold(collector.Name)]; ok {
-				continue
-			}
+			// A quorum over a collector reads that collector's own presence
+			// fact, not its signals, so being named in a quorum does not make
+			// a collector's signals used. But a collector must declare at
+			// least one signal, so when a presence-referenced collector has a
+			// single, otherwise-unused signal, that signal is structurally
+			// required and dropping it is not an option — flagging it would be
+			// noise. A collector with several signals has no such excuse: the
+			// unreferenced ones past the first are genuinely removable.
+			_, collectorReferenced := referenced[fold(collector.Name)]
+			structurallyRequired := collectorReferenced && len(collector.Signals) == 1
 			for _, signal := range collector.Signals {
 				if _, ok := referenced[fold(signal.Signal.Name)]; ok {
+					continue
+				}
+				if structurallyRequired {
 					continue
 				}
 				(*add)(Diagnostic{
