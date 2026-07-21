@@ -61,6 +61,12 @@ type PredicateObject struct {
 	CarvedOut bool `json:"carved_out,omitempty"`
 }
 
+// maxExtendsDepth caps how deep an abstract-rule inheritance chain may
+// run. Expansion copies the accumulated collectors and predicates at every
+// level, so an unbounded chain is O(depth^2) work; no real design nests
+// inheritance anywhere near this deep.
+const maxExtendsDepth = 256
+
 func BuildDocument(tree SyntaxTree) (Document, error) {
 	document := Document{Version: Version}
 	var currentRule *RuleObject
@@ -394,6 +400,9 @@ func expandRuleObject(rule RuleObject, abstracts map[string]RuleObject, stack ma
 	}
 	if _, ok := stack[parentName]; ok {
 		return RuleObject{}, fmt.Errorf("%w: cyclic abstract rule %q", ErrInvalidSyntax, parentName)
+	}
+	if len(stack) >= maxExtendsDepth {
+		return RuleObject{}, fmt.Errorf("%w: abstract rule chain deeper than %d", ErrInvalidSyntax, maxExtendsDepth)
 	}
 	stack[parentName] = struct{}{}
 	parent, err := expandRuleObject(parent, abstracts, stack)
