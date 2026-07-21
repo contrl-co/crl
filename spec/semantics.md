@@ -239,8 +239,9 @@ an unproven rule or cluster is a definite `false`, a negated reference to
 it — `quorum not r`, `block r`, `need r == false`, or even `r & !r2` —
 is satisfied precisely when its evidence is absent, which would
 authorize a decision with no evidence. All such policies are compile
-errors. (Negating a *signal* is fine: an absent signal is unknown, not
-false, so it fails closed.)
+errors, and the same rule applies to a cluster's own predicates (a
+cluster publishes a boolean the policy consumes). (Negating a *signal*
+is fine: an absent signal is unknown, not false, so it fails closed.)
 
 ### Rule inheritance
 
