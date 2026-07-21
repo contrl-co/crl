@@ -586,10 +586,17 @@ func parseValue(raw string) (Value, error) {
 	// represents exactly. Silently rounding `== 9007199254740993` to ...992
 	// would alter a threshold — a real hazard for a governance language
 	// comparing large amounts — and give two distinct literals one hash.
-	// Fractions are inherently approximate and allowed.
+	// Fractions are inherently approximate and allowed; an integer is a
+	// literal with no fraction or exponent. Deciding integer-ness
+	// syntactically (rather than by whether ParseInt succeeds) also catches
+	// magnitudes above 2^63, which overflow int64 and would otherwise slip
+	// past the check.
 	const maxSafeInteger = 1 << 53
-	if intLit, convErr := strconv.ParseInt(raw, 10, 64); convErr == nil && (intLit > maxSafeInteger || intLit < -maxSafeInteger) {
-		return Value{}, fmt.Errorf("%w: integer %q exceeds the exact range (magnitude above 2^53 loses precision)", ErrInvalidSyntax, raw)
+	if !strings.ContainsAny(raw, ".eE") {
+		intLit, convErr := strconv.ParseInt(raw, 10, 64)
+		if convErr != nil || intLit > maxSafeInteger || intLit < -maxSafeInteger {
+			return Value{}, fmt.Errorf("%w: integer %q exceeds the exact range (magnitude above 2^53 loses precision)", ErrInvalidSyntax, raw)
+		}
 	}
 	// Normalize negative zero to zero so `-0` and `0` share one canonical
 	// form as well as one hash.

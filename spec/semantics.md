@@ -232,10 +232,15 @@ The linter separately warns (`CRL203`) when multiple rules or clusters
 have **no** final policy, since "everything must authorize" may not be
 what the author meant.
 
-A final policy of only `block` predicates is a compile error: `block x`
-authorizes exactly when `x` is *not* proven, so a bundle with no
-evidence at all would authorize. A final policy must include at least
-one positive requirement (`need` or `quorum`).
+A final policy must be monotone in every rule and cluster: a rule or
+cluster may be *required* (`need r == true`, an un-negated quorum
+subject, a count-quorum provider) but never gated on *failing*. Because
+an unproven rule or cluster is a definite `false`, a negated reference to
+it — `quorum not r`, `block r`, `need r == false`, or even `r & !r2` —
+is satisfied precisely when its evidence is absent, which would
+authorize a decision with no evidence. All such policies are compile
+errors. (Negating a *signal* is fine: an absent signal is unknown, not
+false, so it fails closed.)
 
 ### Rule inheritance
 
