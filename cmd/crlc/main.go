@@ -37,7 +37,33 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
+// errorTrackingWriter latches the first write error so a failed stdout write
+// (broken pipe, full disk) can be turned into a non-zero exit, instead of the
+// command reporting success while its output never arrived.
+type errorTrackingWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (e *errorTrackingWriter) Write(p []byte) (int, error) {
+	n, err := e.w.Write(p)
+	if err != nil && e.err == nil {
+		e.err = err
+	}
+	return n, err
+}
+
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	tracked := &errorTrackingWriter{w: stdout}
+	code := dispatch(args, stdin, tracked, stderr)
+	if code == 0 && tracked.err != nil {
+		fmt.Fprintf(stderr, "crlc: writing output: %v\n", tracked.err)
+		return 1
+	}
+	return code
+}
+
+func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		usage(stderr)
 		return 2
@@ -260,6 +286,10 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
+	if *format != "text" && *format != "json" {
+		fmt.Fprintf(stderr, "crlc compile: unsupported format %q\n", *format)
+		return 2
+	}
 	source, code := readSource(flags.Args(), stdin, stderr, "crlc compile")
 	if code != 0 {
 		return code
@@ -333,13 +363,41 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if formatted == string(raw) {
 			continue
 		}
-		if err := os.WriteFile(path, []byte(formatted), 0o644); err != nil {
+		if err := writeFileAtomic(path, []byte(formatted)); err != nil {
 			fmt.Fprintf(stderr, "crlc fmt: %v\n", err)
 			return 2
 		}
 		fmt.Fprintln(stdout, path)
 	}
 	return 0
+}
+
+// writeFileAtomic writes data by creating a temp file in the same directory
+// and renaming it over path, so an interrupted or failed write can never
+// truncate the original source. The file's existing mode is preserved.
+func writeFileAtomic(path string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".crlc-fmt-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeds
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // --- eval -----------------------------------------------------------
@@ -352,6 +410,10 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	format := flags.String("format", "text", "output format: text or json")
 	requireAuthorized := flags.Bool("require-authorized", false, "exit 1 unless the result is AUTHORIZED")
 	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if *format != "text" && *format != "json" {
+		fmt.Fprintf(stderr, "crlc eval: unsupported format %q\n", *format)
 		return 2
 	}
 	if *factsPath == "" {

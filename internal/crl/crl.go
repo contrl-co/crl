@@ -172,7 +172,7 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 			return predicate, nil
 		}
 		predicate.Operator = OperatorGTE
-		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int(predicate.Value.Number)) {
+		if predicate.Value.Kind != "number" || predicate.Value.Number < 1 || predicate.Value.Number != float64(int64(predicate.Value.Number)) {
 			return Predicate{}, fmt.Errorf("%w: invalid quorum count", ErrInvalidSyntax)
 		}
 		// A count carries only its number; drop any String/Bool a struct-API
@@ -197,6 +197,12 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 		sort.Strings(providers)
 		predicate.Providers = providers
 		predicate.Expression, predicate.Temporal = nil, nil
+		// Upper-bound the threshold. `count(a,b,c) >= N` with N above the
+		// provider count can never be met; the `N of M` sugar rejects this,
+		// and both spellings compile to the same bundle, so this must too.
+		if predicate.Value.Number > float64(len(providers)) {
+			return Predicate{}, fmt.Errorf("%w: quorum threshold %d out of range 1..%d", ErrInvalidSyntax, int64(predicate.Value.Number), len(providers))
+		}
 	case PredicateTemporal:
 		predicate.Field = normalizeIdentifier(predicate.Field)
 		if !identifierPattern.MatchString(predicate.Field) {
@@ -870,6 +876,12 @@ func signalExpired(signal Signal, facts Facts, now time.Time) (bool, bool) {
 	}
 	observedAt, ok := timeFact(observedRaw)
 	if !ok {
+		return true, true
+	}
+	// An observation stamped after the evaluation clock cannot prove freshness
+	// — nothing is observed in the future. Fail closed rather than grant a full
+	// ttl window starting from a future instant.
+	if observedAt.UTC().After(now.UTC()) {
 		return true, true
 	}
 	expiresAt := observedAt.UTC().Add(time.Duration(signal.Expiry.Seconds) * time.Second)
