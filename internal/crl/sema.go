@@ -3,6 +3,7 @@ package crl
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 type SymbolKind string
@@ -45,6 +46,9 @@ func AnalyzeBundle(bundle Bundle) (SemanticModel, error) {
 
 func analyzeNormalizedBundle(normalized Bundle) (SemanticModel, error) {
 	if err := validateFinalPolicyReachability(normalized); err != nil {
+		return SemanticModel{}, err
+	}
+	if err := validateFinalPolicyMonotone(normalized); err != nil {
 		return SemanticModel{}, err
 	}
 	if err := validateSignalExpiryConsistency(normalized); err != nil {
@@ -216,6 +220,30 @@ func validateFinalPolicyReachability(bundle Bundle) error {
 		if _, ok := referencedClusters[cluster.Name]; !ok {
 			return fmt.Errorf("%w: cluster %q is not reachable from global final policy", ErrInvalidSyntax, cluster.Name)
 		}
+	}
+	return nil
+}
+
+// finalPolicyProbeClock is a fixed, non-zero evaluation instant used only
+// to test a final policy against empty evidence at compile time. It must
+// be a constant (never time.Now) so compilation stays deterministic.
+var finalPolicyProbeClock = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// validateFinalPolicyMonotone rejects a global final policy that would
+// authorize a bundle carrying no evidence. Under fail-closed semantics no
+// rule or cluster can authorize on empty facts, so a sound final policy
+// must also withhold there. A policy that authorizes anyway is inverting
+// — it gates on a rule or cluster FAILING (`quorum not r`, `block r`,
+// `need r == false`) — which authorizes a decision with no evidence at
+// all. Probing with empty facts catches every such spelling, and subsumes
+// the block-only special case above.
+func validateFinalPolicyMonotone(bundle Bundle) error {
+	if len(bundle.Predicates) == 0 {
+		return nil
+	}
+	probe := EvaluateBundleAt(CompiledBundle{Program: bundle}, Facts{}, finalPolicyProbeClock)
+	if probe.Authorized {
+		return fmt.Errorf("%w: global final policy authorizes with no evidence; it must require positive proof (a rule, cluster, or signal holding), not a rule or cluster failing", ErrInvalidSyntax)
 	}
 	return nil
 }
