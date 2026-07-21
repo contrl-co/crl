@@ -458,3 +458,113 @@ quorum regb
 		t.Fatalf("identical re-declaration should compile, got %v", err)
 	}
 }
+
+// A global final policy of only `block` predicates authorizes when its target
+// has no evidence (block ra passes when ra is unproven), so empty facts pass.
+// Such a policy must be rejected at compile.
+func TestBlockOnlyFinalPolicyRejected(t *testing.T) {
+	if _, err := CompileBundle("crl v1\npackage p\nbundle b\nblock ra\n" +
+		"\nrule ra\n\ttarget a.a\n\tcollector c1 org api from /x.json\n" +
+		"\t\tsignal s1 bool from x.y ttl 30d\n\tneed s1 == true\n"); err == nil {
+		t.Fatal("a block-only final policy compiled; empty facts would authorize it")
+	}
+}
+
+// An observation stamped after the evaluation clock cannot prove freshness —
+// nothing is observed in the future. It used to grant a full ttl window from
+// that future instant; it must now fail closed.
+func TestFutureObservationFailsClosed(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget a.b\n" +
+		"\tcollector c1 org api from /x.json\n\t\tsignal s1 bool from x.y ttl 1h\n\tneed s1 == true\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	future := EvaluateBundleAt(compiled, Facts{"s1": true, "observed_at.s1": "2027-01-01T00:00:00Z"}, now)
+	if future.Authorized {
+		t.Fatalf("a future observation authorized (%s); must fail closed", future.Result)
+	}
+	fresh := EvaluateBundleAt(compiled, Facts{"s1": true, "observed_at.s1": now.Add(-30 * time.Minute).Format(time.RFC3339)}, now)
+	if !fresh.Authorized {
+		t.Fatalf("a present fresh observation should authorize, got %s", fresh.Result)
+	}
+}
+
+// A cluster whose member rule is BLOCKED reported a generic DENIED because the
+// member's reason was never in scope for the cluster's result. It must surface
+// the member's outcome.
+func TestClusterReportsBlockedMemberOutcome(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\nneed cl == true\n\n" +
+		"rule ra\n\ttarget a.a\n\tcollector c1 org api from /x.json\n\t\tsignal hold bool from x.y ttl 30d\n\tblock hold\n" +
+		"rule rb\n\ttarget a.b\n\tcollector c2 org api from /y.json\n\t\tsignal s2 bool from y.z ttl 30d\n\tneed s2 == true\n" +
+		"cluster cl\n\trules ra + rb\n\tneed rb == true\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	obs := "2026-06-01T09:00:00Z"
+	result := EvaluateBundleAt(compiled, Facts{
+		"hold": true, "observed_at.hold": obs, "s2": true, "observed_at.s2": obs,
+	}, now)
+	if result.Result != "BLOCKED" {
+		t.Fatalf("cluster with a blocked member: want BLOCKED, got %s", result.Result)
+	}
+}
+
+// Temporal `within N after ref` is a two-sided window. Deleting either bound
+// makes it unbounded (fail-open) and no test caught it. A fact outside the
+// window on either side must not authorize.
+func TestTemporalWithinWindowBothBounds(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector c api api_poll from /c\n" +
+		"\t\tsignal installed_at time from c.i ttl 10y\n" +
+		"\t\tsignal recalibrated_at time from c.r ttl 10y\n" +
+		"\tneed recalibrated_at within 90d after installed_at\n\tquorum c\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	installed := "2026-01-01T00:00:00Z"
+	obs := "2026-05-15T00:00:00Z"
+	eval := func(recal string) string {
+		return EvaluateBundleAt(compiled, Facts{
+			"c": true, "installed_at": installed, "recalibrated_at": recal,
+			"observed_at.installed_at": obs, "observed_at.recalibrated_at": obs,
+		}, now).Result
+	}
+	if got := eval("2026-02-15T00:00:00Z"); got != "AUTHORIZED" { // ~45d after: inside window
+		t.Errorf("within window: want AUTHORIZED, got %s", got)
+	}
+	if got := eval("2026-05-01T00:00:00Z"); got == "AUTHORIZED" { // ~120d after: past upper bound
+		t.Error("past the 90d upper bound must not authorize")
+	}
+	if got := eval("2025-12-01T00:00:00Z"); got == "AUTHORIZED" { // before installed: past lower bound
+		t.Error("before the lower bound must not authorize")
+	}
+}
+
+// A numeric blocker is active when the value is non-zero. Coercing it to
+// always-inactive would authorize with open violations, uncaught.
+func TestNumericBlockerActiveOnNonZero(t *testing.T) {
+	src := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector c api api_poll from /c\n\t\tsignal violations number from c.v ttl 30d\n" +
+		"\t\tsignal ok bool from c.ok ttl 30d\n\tneed ok == true\n\tblock violations\n"
+	compiled, err := CompileBundle(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	obs := "2026-05-31T00:00:00Z"
+	base := Facts{"ok": true, "observed_at.ok": obs, "observed_at.violations": obs}
+	base["violations"] = 3.0
+	if got := EvaluateBundleAt(compiled, base, now).Result; got != "BLOCKED" {
+		t.Errorf("3 open violations: want BLOCKED, got %s", got)
+	}
+	base["violations"] = 0.0
+	if got := EvaluateBundleAt(compiled, base, now).Result; got != "AUTHORIZED" {
+		t.Errorf("0 violations: want AUTHORIZED, got %s", got)
+	}
+}

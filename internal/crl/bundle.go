@@ -420,12 +420,41 @@ func evaluateBundleCluster(cluster Cluster, facts Facts, signals map[string]Sign
 		}
 		checks = append(checks, check)
 	}
+	result := bundleResult(authorized, checks)
+	if !authorized {
+		// The cluster's own predicate checks may not name why an unauthorized
+		// member failed. Surface the most severe member result so the cluster
+		// does not report a generic DENIED over a BLOCKED or EXPIRED member.
+		for _, member := range members {
+			if !member.Authorized && resultSeverity(member.Result) > resultSeverity(result) {
+				result = member.Result
+			}
+		}
+	}
 	return ClusterTrace{
 		ClusterName: cluster.Name,
-		Result:      bundleResult(authorized, checks),
+		Result:      result,
 		Authorized:  authorized,
 		Members:     members,
 		Checks:      checks,
+	}
+}
+
+// resultSeverity ranks outcomes so the most specific failure wins, matching
+// the precedence in bundleResult (EXPIRED > BLOCKED > INSUFFICIENT_EVIDENCE >
+// DENIED).
+func resultSeverity(result string) int {
+	switch result {
+	case "EXPIRED":
+		return 4
+	case "BLOCKED":
+		return 3
+	case "INSUFFICIENT_EVIDENCE":
+		return 2
+	case "DENIED":
+		return 1
+	default:
+		return 0
 	}
 }
 
@@ -517,6 +546,12 @@ func canonicalBundleText(bundle Bundle) string {
 	if bundle.Name != "" {
 		fmt.Fprintf(&b, "bundle %s\n", bundle.Name)
 	}
+	// Global predicates render BEFORE the rules. Emitted after them they land
+	// at column 0 following a rule body, where the rule-body carve-out absorbs
+	// them into that rule and the text no longer re-compiles to itself.
+	for _, predicate := range bundle.Predicates {
+		writePredicate(&b, "", predicate)
+	}
 	for _, rule := range bundle.Rules {
 		fmt.Fprintf(&b, "\nrule %s\n", rule.Name)
 		fmt.Fprintf(&b, "\ttarget %s\n", rule.Target)
@@ -548,12 +583,6 @@ func canonicalBundleText(bundle Bundle) string {
 			writePredicate(&b, "\t", predicate)
 		}
 	}
-	if len(bundle.Predicates) > 0 {
-		b.WriteByte('\n')
-	}
-	for _, predicate := range bundle.Predicates {
-		writePredicate(&b, "", predicate)
-	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -567,7 +596,7 @@ func writePredicate(b *strings.Builder, prefix string, predicate Predicate) {
 		if predicate.Expression != nil {
 			fmt.Fprintf(b, "%squorum %s\n", prefix, RenderQuorumExpression(predicate.Expression))
 		} else {
-			fmt.Fprintf(b, "%squorum count(%s) >= %d\n", prefix, strings.Join(predicate.Providers, ", "), int(predicate.Value.Number))
+			fmt.Fprintf(b, "%squorum count(%s) >= %d\n", prefix, strings.Join(predicate.Providers, ", "), int64(predicate.Value.Number))
 		}
 	case PredicateTemporal:
 		fmt.Fprintf(b, "%s%s\n", prefix, renderTemporalPredicate(predicate))

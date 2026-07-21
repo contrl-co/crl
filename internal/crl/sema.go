@@ -168,6 +168,19 @@ func validateFinalPolicyReachability(bundle Bundle) error {
 	if len(bundle.Predicates) == 0 {
 		return nil
 	}
+	// A final policy of only `block` predicates has no positive requirement:
+	// `block ra` authorizes exactly when ra fails, so empty evidence (ra
+	// unproven) authorizes the bundle. Require at least one need/quorum.
+	allBlocks := true
+	for _, predicate := range bundle.Predicates {
+		if predicate.Kind != PredicateBlock {
+			allBlocks = false
+			break
+		}
+	}
+	if allBlocks {
+		return fmt.Errorf("%w: global final policy must require something (need or quorum); a block-only policy authorizes when its target has no evidence", ErrInvalidSyntax)
+	}
 	ruleNames := map[string]struct{}{}
 	clusterByName := map[string]Cluster{}
 	for _, rule := range bundle.Rules {

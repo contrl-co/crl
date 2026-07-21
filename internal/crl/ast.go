@@ -55,6 +55,10 @@ type PredicateObject struct {
 	Span      SourceSpan `json:"span"`
 	Fields    []string   `json:"fields"`
 	Predicate Predicate  `json:"predicate"`
+	// CarvedOut is true when an unindented predicate after a rule body was
+	// absorbed into that rule by the rule-body carve-out, rather than authored
+	// inside it. The author may have intended a global final policy.
+	CarvedOut bool `json:"carved_out,omitempty"`
 }
 
 func BuildDocument(tree SyntaxTree) (Document, error) {
@@ -280,6 +284,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				if err != nil {
 					return Document{}, err
 				}
+				predicate.CarvedOut = forceRuleBody
 				currentRule.Predicates = append(currentRule.Predicates, predicate)
 			default:
 				return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)

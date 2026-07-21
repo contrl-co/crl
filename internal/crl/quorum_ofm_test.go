@@ -56,3 +56,18 @@ func TestQuorumNofMDesugarsToCount(t *testing.T) {
 		}
 	}
 }
+
+// `count(a,b) >= N` with N above the provider count can never be met. The
+// `N of M` sugar rejected it but the count spelling walked past — both
+// compile to the same bundle, so both must reject it.
+func TestCountQuorumUpperBoundEnforced(t *testing.T) {
+	base := "crl v1\npackage p\nbundle b\n\nrule r\n\ttarget t.x\n" +
+		"\tcollector a m file_upload from /a\n\t\tsignal sa bool from a.a ttl 30d\n" +
+		"\tcollector bb m file_upload from /b\n\t\tsignal sb bool from b.b ttl 30d\n\tquorum "
+	if _, err := CompileBundle(base + "count(a, bb) >= 5\n"); err == nil {
+		t.Fatal("count threshold above provider count compiled; it can never be met")
+	}
+	if _, err := CompileBundle(base + "count(a, bb) >= 2\n"); err != nil {
+		t.Fatalf("count threshold within range must compile: %v", err)
+	}
+}
