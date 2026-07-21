@@ -172,7 +172,33 @@ func parseBlock(field string) (Predicate, error) {
 	})
 }
 
+// splitPlusFields re-splits a bare `+` that the lexer absorbed into an
+// atom. Since `+` is no longer a token delimiter (so an RFC3339 offset
+// like ...+05:30 stays whole), an unspaced `ca+cb` arrives as one field;
+// count-quorum providers and cluster rules join subjects with `+`, so
+// they must see it as a separator. Identifiers never contain `+`, and a
+// timestamp never appears in either position, so splitting here is safe.
+func splitPlusFields(fields []string) []string {
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field == "+" || !strings.Contains(field, "+") {
+			out = append(out, field)
+			continue
+		}
+		for i, part := range strings.Split(field, "+") {
+			if i > 0 {
+				out = append(out, "+")
+			}
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
 func parseQuorum(fields []string) (Predicate, error) {
+	fields = splitPlusFields(fields)
 	if pred, ok, err := parseOfQuorum(fields); ok || err != nil {
 		return pred, err
 	}
@@ -307,6 +333,7 @@ func parseCountQuorumProviders(raw string) ([]string, bool, error) {
 }
 
 func parseClusterRules(fields []string) ([]string, error) {
+	fields = splitPlusFields(fields)
 	if len(fields) == 0 {
 		return nil, fmt.Errorf("%w: cluster rules cannot be empty", ErrInvalidSyntax)
 	}
