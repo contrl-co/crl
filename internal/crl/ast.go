@@ -74,6 +74,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 	// flat rule the predicate unambiguously belongs to it, so there is no
 	// hidden global-policy intent to warn about.
 	ruleBodyIndented := false
+	quorumFieldTotal := 0
 
 	flushCollector := func() {
 		if currentRule != nil && currentCollector != nil {
@@ -138,6 +139,12 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 			return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)
 		}
 		keyword := fields[0]
+		if keyword == PredicateQuorum {
+			quorumFieldTotal += len(fields)
+			if quorumFieldTotal > maxBundleQuorumFields {
+				return Document{}, fmt.Errorf("%w: bundle has too much quorum content (limit %d)", ErrInvalidSyntax, maxBundleQuorumFields)
+			}
+		}
 		forceRuleBody := statement.Indent == 0 && currentRule != nil && currentCluster == nil && isRuleBodyKeyword(keyword)
 		atTopLevel := (statement.Indent == 0 && len(blockStack) == 0) || (inBundleBlock(blockStack) && currentRule == nil && currentCluster == nil)
 		if atTopLevel && !forceRuleBody {
