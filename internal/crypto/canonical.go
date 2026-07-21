@@ -34,9 +34,10 @@ var ErrDuplicateKey = errors.New("canonical json: duplicate key")
 //     so distinct invalid inputs still collide here. Reject invalid UTF-8
 //     upstream.
 //
-// This is RFC 8785 for the inputs CRL produces. Callers hashing text must
-// normalize it first, in the layer that also compares it; normalizing here
-// would let two different programs share a hash.
+// This is a fixed canonical encoding, not a conformant RFC 8785/JCS
+// implementation: numbers are emitted verbatim, not ECMAScript-reformatted.
+// Callers hashing text must normalize it first, in the layer that also
+// compares it; normalizing here would let two different programs share a hash.
 //
 // The function deliberately goes through json.Marshal first so that
 // struct tags, embedded fields, and time.Time formatting all match the
