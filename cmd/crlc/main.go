@@ -376,6 +376,13 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // and renaming it over path, so an interrupted or failed write can never
 // truncate the original source. The file's existing mode is preserved.
 func writeFileAtomic(path string, data []byte) error {
+	// Follow a symlink to its target before writing. os.Rename replaces the
+	// symlink itself rather than the file it points at, so without this a
+	// `crlc fmt -w link.crl` would turn the link into a regular file and
+	// leave the real, tracked file untouched while reporting success.
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm()
