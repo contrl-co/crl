@@ -4,7 +4,16 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
+
+// maxSourceBytes bounds the size of a single CRL source. The lexer
+// materializes the whole source as a rune slice up front, so memory is
+// linear in input length before any token-level limit can apply; this
+// cap is the one that actually bounds that allocation. It is far above
+// any hand-authored rule (the entire example corpus is a few KB) and
+// exists only to stop a pathological multi-hundred-megabyte input.
+const maxSourceBytes = 8 << 20 // 8 MiB
 
 type TokenKind string
 
@@ -40,6 +49,18 @@ type Token struct {
 const maxTokens = 1_000_000
 
 func Lex(source string) ([]Token, error) {
+	if len(source) > maxSourceBytes {
+		return nil, fmt.Errorf("%w: source is too large (%d bytes, limit %d)", ErrInvalidSyntax, len(source), maxSourceBytes)
+	}
+	// Validate UTF-8 before the []rune conversion below. Converting an
+	// invalid byte to a rune silently substitutes U+FFFD, which would
+	// erase the original bytes before they could be rejected — two
+	// byte-distinct sources could then compile to one hash while the
+	// evaluator still saw their raw, differing bytes. Reject up front so
+	// a program's bytes are fixed before anything reads them.
+	if !utf8.ValidString(source) {
+		return nil, fmt.Errorf("%w: source is not valid UTF-8", ErrInvalidSyntax)
+	}
 	lexer := crlLexer{
 		input:  []rune(source),
 		line:   1,
