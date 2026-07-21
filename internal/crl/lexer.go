@@ -31,6 +31,14 @@ type Token struct {
 	Column  int       `json:"column"`
 }
 
+// maxTokens caps how many tokens the lexer will materialize. The lexer emits
+// one token per delimiter/operator, so a pathological source (e.g. millions of
+// nested parens in a quorum expression) would otherwise build a multi-million
+// entry slice — gigabytes of transient memory — before any parser-level size
+// check runs. No hand-authored bundle approaches this limit; past it we fail
+// closed. Rejection-only: it never changes how a valid source tokenizes.
+const maxTokens = 1_000_000
+
 func Lex(source string) ([]Token, error) {
 	lexer := crlLexer{
 		input:  []rune(source),
@@ -50,6 +58,9 @@ type crlLexer struct {
 func (l *crlLexer) lex() ([]Token, error) {
 	var tokens []Token
 	for !l.done() {
+		if len(tokens) >= maxTokens {
+			return nil, fmt.Errorf("%w: source has too many tokens (limit %d)", ErrInvalidSyntax, maxTokens)
+		}
 		ch := l.peek()
 		switch {
 		case ch == ' ' || ch == '\t' || ch == '\r':
