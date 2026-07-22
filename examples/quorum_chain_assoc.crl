@@ -1,0 +1,19 @@
+crl v1
+package examples.quorums
+bundle quorum.chain
+
+# Determinism pin for associative-chain canonicalization: a `&`/`|`
+# chain of three or more operands flattens and sorts before hashing,
+# so every grouping and order of the same operands must land on this
+# file's golden hash. The operands are authored deliberately unsorted.
+rule chain_pin
+	target quorum.chain
+	collector charlie org api from /bundles/charlie.json
+	signal c_ok bool from c.ok ttl 30d
+	collector alpha org api from /bundles/alpha.json
+	signal a_ok bool from a.ok ttl 30d
+	collector bravo org api from /bundles/bravo.json
+	signal b_ok bool from b.ok ttl 30d
+	need a_ok == true
+	quorum charlie & alpha & bravo
+	quorum bravo | (charlie | alpha)

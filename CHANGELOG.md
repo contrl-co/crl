@@ -37,6 +37,14 @@ weekly; the v1 edition's compilation contract does not change (see
   [spec/editions.md](spec/editions.md)); six of the nine example bundle
   hashes changed. The canonical JSON encoding is documented honestly as
   purpose-built, not a conformant RFC 8785 implementation.
+- **Bundle hashes moved for quorum chains of three or more operands.**
+  Canonicalization now flattens each maximal `&`/`|` chain and sorts
+  its operands, so every grouping and order of the same operands
+  shares one hash and canonical text always recompiles to itself. An
+  unsorted chain that happened to be a fixed point of the old pairwise
+  normalization compiles to a different hash than before — also a
+  pre-freeze v1 correction (see [spec/editions.md](spec/editions.md)),
+  pinned by `examples/quorum_chain_assoc.crl`.
 - Global final-policy predicates now render before the rules in
   canonical text, so a bundle with a global policy round-trips through
   `crlc fmt`.
