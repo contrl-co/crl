@@ -1,6 +1,9 @@
 package crl
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Associative quorum groupings must all normalize to one canonical tree
 // so the emitted canonical text recompiles to the same hash.
@@ -36,31 +39,22 @@ func TestQuorumAssociativityCanonical(t *testing.T) {
 	}
 }
 
+// The aggregate budget must trip for its own reason, on an input well
+// under the lexer's token and source-size caps — not because some
+// earlier limit happened to fire first.
 func TestBundleQuorumBudget(t *testing.T) {
-	var b []string
-	b = append(b, "crl v1\nrule r\n\ttarget a.b\n\tcollector c org api from /x.json\n\t\tsignal s bool from f ttl 1h")
-	chain := "\tquorum " + repeatJoin("s", " & ", 256)
-	for i := 0; i < 8000; i++ {
-		b = append(b, chain)
+	var b strings.Builder
+	b.WriteString("crl v1\nrule r\n\ttarget a.b\n\tcollector c org api from /x.json\n\t\tsignal s bool from f ttl 1h\n")
+	chain := "\tquorum " + strings.Repeat("s & ", 255) + "s\n"
+	for range 200 {
+		b.WriteString(chain)
 	}
-	b = append(b, "\tneed s == true\n")
-	if _, err := CompileBundle(joinLines(b)); err == nil {
+	b.WriteString("\tneed s == true\n")
+	_, err := CompileBundle(b.String())
+	if err == nil {
 		t.Fatal("a bundle packed with quorum expressions past the budget must be rejected")
 	}
-}
-
-func repeatJoin(s, sep string, n int) string {
-	out := s
-	for i := 1; i < n; i++ {
-		out += sep + s
+	if !strings.Contains(err.Error(), "too much quorum content") {
+		t.Fatalf("rejection must come from the quorum budget, got: %v", err)
 	}
-	return out
-}
-
-func joinLines(lines []string) string {
-	out := ""
-	for _, l := range lines {
-		out += l + "\n"
-	}
-	return out
 }
