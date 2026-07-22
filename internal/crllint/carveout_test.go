@@ -19,6 +19,12 @@ func TestCRL210OnlyMixedIndentation(t *testing.T) {
 	if !has(codes(mixed), "CRL210") {
 		t.Error("CRL210 must fire when an indented rule body has a dedented predicate")
 	}
+	// A bundle-level brace does not scope the predicate to the rule: an
+	// indentation-form rule inside `bundle x {` still has the ambiguity.
+	bracedBundle := "crl v1\npackage t.bb\nbundle t.bb {\nrule ra\n\ttarget t.r\n\tcollector c1 municipality api from /bundles/x.json\n\t\tsignal s1 bool from a.one ttl 30d\n\tquorum c1\nneed s1 == true\n}\n"
+	if !has(codes(bracedBundle), "CRL210") {
+		t.Error("CRL210 must fire for an indented rule with a dedented predicate inside a braced bundle")
+	}
 }
 
 // CRL209 flags a genuinely removable unreferenced signal, but not a

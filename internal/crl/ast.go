@@ -310,12 +310,13 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				if err != nil {
 					return Document{}, err
 				}
-				// Only flag the carve-out in indentation form (no open brace
-				// block scoping the predicate) and only when the rule's body is
+				// Only flag the carve-out in indentation form (no rule brace
+				// scoping the predicate) and only when the rule's body is
 				// otherwise indented — the mixed-indentation shape that hides a
 				// possible global-policy intent. A braced rule or a fully flat
-				// rule has no such ambiguity.
-				predicate.CarvedOut = forceRuleBody && len(blockStack) == 0 && ruleBodyIndented
+				// rule has no such ambiguity; a braced BUNDLE around an
+				// indentation-form rule does not resolve it.
+				predicate.CarvedOut = forceRuleBody && !inRuleBlock(blockStack) && ruleBodyIndented
 				currentRule.Predicates = append(currentRule.Predicates, predicate)
 			default:
 				return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)
@@ -358,6 +359,15 @@ func (s SyntaxStatement) Span() SourceSpan {
 
 func inBundleBlock(stack []string) bool {
 	return len(stack) == 1 && stack[0] == "bundle"
+}
+
+func inRuleBlock(stack []string) bool {
+	for _, kind := range stack {
+		if kind == "rule" || kind == "constructor" {
+			return true
+		}
+	}
+	return false
 }
 
 // expandAbstractRules runs even when the document declares no abstract
