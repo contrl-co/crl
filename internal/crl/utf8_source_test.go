@@ -9,19 +9,25 @@ import (
 // conversion folds it to U+FFFD. Otherwise byte-distinct sources compile
 // to one hash while the evaluator still compares their differing bytes.
 func TestCompileRejectsInvalidUTF8Source(t *testing.T) {
-	base := "crl v1\npackage e.u\nbundle u.t\nrule r\n\ttarget a.b\n\tcollector c org api from /x.json\n\t\tsignal s string from x.y ttl 30d\n\tneed s != %q\n\tquorum c\n"
-	// Two byte-distinct invalid sources plus a genuine U+FFFD literal.
-	invalidA := "crl v1\nneed s != \"A\xffB\"\n"
-	invalidB := "crl v1\nneed s != \"A\xfeB\"\n"
-	for name, src := range map[string]string{"0xff": invalidA, "0xfe": invalidB} {
-		if _, err := CompileBundle(src); err == nil {
-			t.Errorf("%s: invalid UTF-8 source must not compile", name)
+	base := "crl v1\npackage e.u\nbundle u.t\nrule r\n\ttarget a.b\n\tcollector c org api from /x.json\n\t\tsignal s string from x.y ttl 30d\n\tneed s != {LIT}\n\tquorum c\n"
+	// The byte-valid twin must compile, so a rejection below can only
+	// come from the encoding check, not an unrelated parse failure.
+	if _, err := CompileBundle(strings.Replace(base, "{LIT}", "\"AB\"", 1)); err != nil {
+		t.Fatalf("byte-valid twin must compile: %v", err)
+	}
+	for name, lit := range map[string]string{"0xff": "\"A\xffB\"", "0xfe": "\"A\xfeB\""} {
+		_, err := CompileBundle(strings.Replace(base, "{LIT}", lit, 1))
+		if err == nil {
+			t.Fatalf("%s: invalid UTF-8 source must not compile", name)
+		}
+		if !strings.Contains(err.Error(), "not valid UTF-8") {
+			t.Errorf("%s: rejection must come from the UTF-8 check, got: %v", name, err)
 		}
 	}
-	// A well-formed non-ASCII program must still compile.
-	good := strings.Replace(base, "%q", "\"café\"", 1)
-	if _, err := CompileBundle(good); err != nil {
-		t.Fatalf("valid UTF-8 source must compile: %v", err)
+	// A literal U+FFFD is valid UTF-8 and must stay compilable — the
+	// check rejects invalid bytes, not the replacement rune itself.
+	if _, err := CompileBundle(strings.Replace(base, "{LIT}", "\"A�B\"", 1)); err != nil {
+		t.Errorf("literal U+FFFD must compile: %v", err)
 	}
 }
 
