@@ -459,6 +459,14 @@ func resultSeverity(result string) int {
 }
 
 func bundleAuthorized(ruleTraces []RuleTrace, clusterTraces []ClusterTrace, globalChecks []Check, hasGlobal bool) bool {
+	// Fail closed on an empty program: a bundle with no rules, clusters, or
+	// global predicates has nothing to prove and must never authorize. A
+	// validly compiled bundle always has at least one rule (normalizeBundle
+	// rejects an empty rule set), so this only guards a zero-value or
+	// hand-built CompiledBundle reaching the evaluator directly.
+	if !hasGlobal && len(ruleTraces) == 0 && len(clusterTraces) == 0 {
+		return false
+	}
 	if hasGlobal {
 		return checksPass(globalChecks)
 	}
