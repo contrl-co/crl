@@ -48,6 +48,30 @@ closed.
 - Sign your work (DCO): add `Signed-off-by: Your Name <you@example.com>`
   to each commit (`git commit -s`).
 
+## Merge gates
+
+CI enforces these on every MR pipeline, for human and AI-authored
+changes alike:
+
+- Every MR carries at least one label (`Fix`, `Feature`, `Chore`,
+  ...). Labels feed the changelog automation planned for releases.
+- A `DO NOT MERGE` label fails the pipeline.
+- A test file added by an MR must fail against the base
+  implementation (`mr-new-tests-pin`). A new test that passes on the
+  old code pins nothing.
+- A compiler change that moves hashes of unchanged source needs a
+  "hashes moved" CHANGELOG entry (`mr-hash-disclosure`), per
+  [spec/editions.md](spec/editions.md).
+
+Reviewers enforce the rest:
+
+- Claims in an MR description name the test or repro that proves
+  them. The reviewer checks at least the headline claim before
+  approving.
+- Changes too large to review commit-by-commit get split first. That
+  includes generated code: the author reads every line they submit.
+- No self-merge. Approvals reset when new commits arrive.
+
 ## Running the gates locally
 
 ```sh
