@@ -41,6 +41,57 @@ gofmt-vet:
     - 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files need formatting"; exit 1; }'
     - go vet ./...
 
+# --- Merge-request gates ---------------------------------------------
+# MR-pipeline-only jobs enforcing review policy the settings UI cannot
+# (see CONTRIBUTING.md, "Merge gates"). All three must be green to
+# merge once "pipeline must succeed" is enabled on the project.
+
+# Every MR needs at least one label (Fix, Feature, Chore, ...) so the
+# release changelog automation can classify it, and a DO NOT MERGE
+# label fails the pipeline. Labels are read at pipeline start; changing
+# them later does not rerun a finished pipeline, so re-run before
+# merging.
+mr-labels:
+  stage: lint
+  image: alpine:3.21
+  script:
+    - |
+      if [ -z "$CI_MERGE_REQUEST_LABELS" ]; then
+        echo "MR has no labels; add one (Fix, Feature, Chore, ...) so release automation can classify it"
+        exit 1
+      fi
+      labels=$(printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr '[:lower:]' '[:upper:]')
+      case ",$labels," in
+        *",DO NOT MERGE,"*) echo "MR carries the DO NOT MERGE label; refusing"; exit 1;;
+        *) echo "label check passed";;
+      esac
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# A compiler change that moves hashes of unchanged source must carry a
+# "hashes moved" CHANGELOG entry (spec/editions.md).
+mr-hash-disclosure:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - git fetch -q origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - sh scripts/ci/check-hash-disclosure.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# A test file added by an MR must fail against the base implementation,
+# or it pins nothing.
+mr-new-tests-pin:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - git fetch -q origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - sh scripts/ci/check-new-tests-pin.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
 test:
   stage: test
   image: $GO_IMAGE
