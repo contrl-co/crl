@@ -1314,8 +1314,10 @@ func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression,
 	// trial-parsing the rendered form through the exact text-path validator.
 	// For the text path this is a redundant no-op (normalization only ever
 	// removes tokens and parens), so it never rejects a text-accepted input.
-	// strings.Fields mirrors how the lexer splits the rendered text into the
-	// whitespace-separated fields quorumTokens expects.
+	// strings.Fields matches the lexer's split of the rendered text only
+	// because operator-word subject names are rejected in normalization —
+	// `!and` is one whitespace field but two lexer tokens, the sole
+	// divergence between the two splits.
 	rendered := RenderQuorumExpression(normalized)
 	reparsed, err := parseQuorumFields(strings.Fields(rendered))
 	if err != nil {
@@ -1345,6 +1347,12 @@ func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*Quor
 		name := normalizeIdentifier(expression.Name)
 		if !identifierPattern.MatchString(name) {
 			return nil, fmt.Errorf("%w: invalid quorum subject %q", ErrInvalidSyntax, expression.Name)
+		}
+		// An operator word can never round-trip as a subject name: the
+		// rendered `!and` re-lexes as `! &`. Reject it here so no path
+		// emits canonical text the text parser then refuses.
+		if logicalFieldAlias(name) != name {
+			return nil, fmt.Errorf("%w: quorum subject %q collides with an operator word", ErrInvalidSyntax, expression.Name)
 		}
 		return &QuorumExpression{Kind: "subject", Name: name}, nil
 	case "not":
