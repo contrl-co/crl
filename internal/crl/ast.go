@@ -61,12 +61,26 @@ type PredicateObject struct {
 	CarvedOut bool `json:"carved_out,omitempty"`
 }
 
+// maxExtendsDepth caps how deep an abstract-rule inheritance chain may
+// run. Expansion copies the accumulated collectors and predicates at every
+// level, so an unbounded chain is O(depth^2) work; no real design nests
+// inheritance anywhere near this deep.
+const maxExtendsDepth = 256
+
 func BuildDocument(tree SyntaxTree) (Document, error) {
 	document := Document{Version: Version}
 	var currentRule *RuleObject
 	var currentCluster *ClusterObject
 	var currentCollector *CollectorObject
 	var blockStack []string
+	// ruleBodyIndented records whether the current rule has any indented
+	// body statement. A predicate is only "carved out" of a rule in a
+	// meaningful way when the author is otherwise using indentation form
+	// (indented body) but dedents the predicate to column 0 — in a fully
+	// flat rule the predicate unambiguously belongs to it, so there is no
+	// hidden global-policy intent to warn about.
+	ruleBodyIndented := false
+	quorumFieldTotal := 0
 
 	flushCollector := func() {
 		if currentRule != nil && currentCollector != nil {
@@ -131,6 +145,12 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 			return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)
 		}
 		keyword := fields[0]
+		if keyword == PredicateQuorum {
+			quorumFieldTotal += len(fields)
+			if quorumFieldTotal > maxBundleQuorumFields {
+				return Document{}, fmt.Errorf("%w: bundle has too much quorum content (limit %d)", ErrInvalidSyntax, maxBundleQuorumFields)
+			}
+		}
 		forceRuleBody := statement.Indent == 0 && currentRule != nil && currentCluster == nil && isRuleBodyKeyword(keyword)
 		atTopLevel := (statement.Indent == 0 && len(blockStack) == 0) || (inBundleBlock(blockStack) && currentRule == nil && currentCluster == nil)
 		if atTopLevel && !forceRuleBody {
@@ -175,6 +195,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[2], Abstract: true}
+				ruleBodyIndented = false
 				if len(fields) == 5 {
 					currentRule.Extends = fields[4]
 				}
@@ -192,6 +213,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[1], Abstract: true}
+				ruleBodyIndented = false
 				if len(fields) == 4 {
 					currentRule.Extends = fields[3]
 				}
@@ -209,6 +231,7 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				flushCluster()
 				flushRule()
 				currentRule = &RuleObject{Span: statement.Span(), Name: fields[1]}
+				ruleBodyIndented = false
 				if len(fields) == 4 {
 					currentRule.Extends = fields[3]
 				}
@@ -243,6 +266,9 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 
 		switch {
 		case currentRule != nil:
+			if statement.Indent > 0 {
+				ruleBodyIndented = true
+			}
 			switch keyword {
 			case "target":
 				if len(fields) != 2 {
@@ -284,7 +310,13 @@ func BuildDocument(tree SyntaxTree) (Document, error) {
 				if err != nil {
 					return Document{}, err
 				}
-				predicate.CarvedOut = forceRuleBody
+				// Only flag the carve-out in indentation form (no rule brace
+				// scoping the predicate) and only when the rule's body is
+				// otherwise indented — the mixed-indentation shape that hides a
+				// possible global-policy intent. A braced rule or a fully flat
+				// rule has no such ambiguity; a braced BUNDLE around an
+				// indentation-form rule does not resolve it.
+				predicate.CarvedOut = forceRuleBody && !inRuleBlock(blockStack) && ruleBodyIndented
 				currentRule.Predicates = append(currentRule.Predicates, predicate)
 			default:
 				return Document{}, fmt.Errorf("%w at line %d", ErrInvalidSyntax, statement.Line)
@@ -329,6 +361,15 @@ func inBundleBlock(stack []string) bool {
 	return len(stack) == 1 && stack[0] == "bundle"
 }
 
+func inRuleBlock(stack []string) bool {
+	for _, kind := range stack {
+		if kind == "rule" || kind == "constructor" {
+			return true
+		}
+	}
+	return false
+}
+
 // expandAbstractRules runs even when the document declares no abstract
 // rules: an `extends` clause must always resolve, and a dangling parent
 // must fail loudly. Skipping expansion would silently drop the clause
@@ -369,6 +410,9 @@ func expandRuleObject(rule RuleObject, abstracts map[string]RuleObject, stack ma
 	}
 	if _, ok := stack[parentName]; ok {
 		return RuleObject{}, fmt.Errorf("%w: cyclic abstract rule %q", ErrInvalidSyntax, parentName)
+	}
+	if len(stack) >= maxExtendsDepth {
+		return RuleObject{}, fmt.Errorf("%w: abstract rule chain deeper than %d", ErrInvalidSyntax, maxExtendsDepth)
 	}
 	stack[parentName] = struct{}{}
 	parent, err := expandRuleObject(parent, abstracts, stack)

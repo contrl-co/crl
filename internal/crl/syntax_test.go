@@ -44,7 +44,10 @@ func TestParseRendersLogicalSyntaxFields(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	got := tree.Statements[0].Fields()
-	want := []string{"quorum", "utility_record", "&", "!", "(", "grid_hold", "|", "stale_capacity", ")"}
+	// Fields() keeps identifiers raw; the and/or/not -> &/|/! aliasing is
+	// applied later, only inside a quorum expression (quorumTokens), so it
+	// never rewrites an identifier used as a source or field path.
+	want := []string{"quorum", "utility_record", "and", "not", "(", "grid_hold", "or", "stale_capacity", ")"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
 	}

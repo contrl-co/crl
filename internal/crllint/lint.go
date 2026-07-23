@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gitlab.com/contrl-group/crl/internal/crl"
@@ -249,13 +250,21 @@ func addUnreferencedSignalDiagnostics(document crl.Document, add *func(Diagnosti
 	}
 	for _, rule := range authoredRules {
 		for _, collector := range rule.Collectors {
-			// A count quorum names a collector, not its signals; treat every
-			// signal of a referenced collector as used.
-			if _, ok := referenced[fold(collector.Name)]; ok {
-				continue
-			}
+			// A quorum over a collector reads that collector's own presence
+			// fact, not its signals, so being named in a quorum does not make
+			// a collector's signals used. But a collector must declare at
+			// least one signal, so when a presence-referenced collector has a
+			// single, otherwise-unused signal, that signal is structurally
+			// required and dropping it is not an option — flagging it would be
+			// noise. A collector with several signals has no such excuse: the
+			// unreferenced ones past the first are genuinely removable.
+			_, collectorReferenced := referenced[fold(collector.Name)]
+			structurallyRequired := collectorReferenced && len(collector.Signals) == 1
 			for _, signal := range collector.Signals {
 				if _, ok := referenced[fold(signal.Signal.Name)]; ok {
+					continue
+				}
+				if structurallyRequired {
 					continue
 				}
 				(*add)(Diagnostic{
@@ -285,14 +294,14 @@ func addExpiryRoundingDiagnostics(signal crl.SignalObject, add *func(Diagnostic)
 	}
 	literal := strings.ToLower(strings.TrimSpace(expiry.Literal))
 	switch {
-	case strings.HasSuffix(literal, "ms"):
+	case strings.HasSuffix(literal, "ms") && subSecondMillis(literal):
 		(*add)(Diagnostic{
 			Line:     signal.Span.Line,
 			Column:   signal.Span.Column,
 			Severity: SeverityWarning,
 			Code:     "CRL206",
 			Message: fmt.Sprintf(
-				"ttl %q rounds to 1s: sub-second TTLs are not representable and the millisecond value is discarded",
+				"ttl %q rounds up to the next whole second: durations have one-second granularity, so a sub-second value is not represented exactly",
 				expiry.Literal,
 			),
 		})
@@ -681,4 +690,15 @@ func MeetsThreshold(diagnostics []Diagnostic, threshold Severity) bool {
 		}
 	}
 	return false
+}
+
+// subSecondMillis reports whether an `ms` duration literal is not a whole
+// number of seconds (so it is rounded up to the next second at compile).
+func subSecondMillis(literal string) bool {
+	digits := strings.TrimSuffix(literal, "ms")
+	n, err := strconv.Atoi(digits)
+	if err != nil {
+		return true
+	}
+	return n%1000 != 0
 }

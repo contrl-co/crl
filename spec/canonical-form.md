@@ -52,9 +52,12 @@ Compilation normalizes the object model before rendering or hashing:
 
 The canonical text is a complete CRL source rendered from the
 normalized bundle with a fixed layout: the `crl v1` header, `package`
-and `bundle` lines when present, then each rule (tab-indented body,
-signals nested under their collectors), each cluster, and any global
-predicates. The canonical text of a bundle:
+and `bundle` lines when present, then any global predicates, then each
+rule (tab-indented body, signals nested under their collectors), then
+each cluster. Global predicates render *before* the rules: emitted after
+a rule body they would sit at column 0 following it, where the rule-body
+carve-out would absorb them into that rule and the text would no longer
+re-compile to itself. The canonical text of a bundle:
 
 - re-compiles, and re-compiles **to itself** (formatting is a fixed
   point);
@@ -72,12 +75,14 @@ Canonicalization Scheme) implementation (see the note on numbers below):
   every object key CRL emits is a fixed ASCII schema key, so byte,
   code-point, and UTF-16 order all coincide);
 - no whitespace between tokens;
-- numbers are emitted verbatim, exactly as the compiler renders them —
-  the encoder performs no ECMAScript/JCS number reformatting (`1.0`
-  stays `1.0`, `1e2` stays `1e2`). CRL's single numeric type is
-  IEEE-754 double, so an authored integer larger than 2^53 is not
-  representable exactly, while integer second-counts and thresholds are
-  emitted at full precision;
+- numbers are emitted exactly as the compiler's canonical rendering
+  produced them — the encoder itself performs no reformatting. Number
+  literals are normalized earlier, during compilation: `1.0`
+  canonicalizes to `1`, `1e2` to `100`, `4.50` to `4.5`, so the bytes
+  hashed are the canonical rendering, never the authored spelling.
+  CRL's single numeric type is IEEE-754 double; whole numbers render
+  with exact integer digits, and an integer literal beyond ±2^53 is
+  rejected at compile time rather than silently rounded;
 - strings are emitted verbatim, with no HTML escaping of `<`, `>`, or
   `&`;
 - duplicate object keys rejected outright — two inputs that differ
@@ -85,12 +90,12 @@ Canonicalization Scheme) implementation (see the note on numbers below):
   bytes.
 
 CRL deliberately does not adopt RFC 8785/JCS: its number rule
-re-serializes values through the ECMAScript algorithm (for example
-`4.50` → `4.5`, `1E30` → `1e+30`), which would reformat values and fold
-distinct authored literals together. Hashing exactly what the compiler
-renders keeps one program's bytes fixed. The practical consequence is
-that the bundle hash is reproduced by following this specification (or
-reusing this toolchain), not by running an off-the-shelf JCS library.
+re-serializes values through the ECMAScript shortest-form algorithm
+(for example `1E30` → `1e+30`), whose output is not guaranteed to
+match the compiler's canonical rendering byte for byte. The hash is
+defined over exactly the bytes the compiler renders, so it is
+reproduced by following this specification (or reusing this
+toolchain), not by running an off-the-shelf JCS library.
 
 Unicode normalization is **not** performed by the encoder. The compiler
 folds every hashed string to Unicode NFC and rejects invalid UTF-8
