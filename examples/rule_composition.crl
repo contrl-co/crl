@@ -1,0 +1,28 @@
+crl v1
+package examples.permits
+
+bundle permit.launch {
+    constructor current_registry_evidence {
+        collector registry_record registry webhook from /bundles/registry.json schema registry_evidence_v1 {
+            signal record_current bool from record.current ttl 30d
+        }
+        need record_current == true
+        quorum registry_record
+    }
+
+    abstract rule no_active_hold extends current_registry_evidence {
+        collector hold_record registry webhook from /bundles/holds.json {
+            signal active_hold bool from hold.active ttl 30d
+        }
+        block active_hold
+    }
+
+    rule permit_ready extends no_active_hold {
+        target permit.application
+        collector application_file municipality file_upload from /bundles/application.json {
+            signal application_complete bool from application.complete ttl 30d
+        }
+        need application_complete == true
+        quorum application_file & registry_record
+    }
+}

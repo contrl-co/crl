@@ -1,0 +1,49 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [
+    ["{", "}"],
+    ["(", ")"],
+    ["[", "]"]
+  ],
+  "autoClosingPairs": [
+    ["{", "}"],
+    ["(", ")"],
+    ["[", "]"],
+    ["\"", "\""],
+    ["'", "'"]
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["(", ")"],
+    ["[", "]"],
+    ["\"", "\""],
+    ["'", "'"]
+  ],
+  "folding": {
+    "markers": {
+      "start": "^\\s*(bundle|constructor|abstract\\s+rule|rule|cluster|collector)\\b.*\\{\\s*(#.*)?$",
+      "end": "^\\s*}\\s*(#.*)?$"
+    }
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(bundle|constructor|abstract\\s+rule|rule|cluster|collector)\\b.*\\{\\s*(#.*)?$",
+      "action": {
+        "indentAction": "Indent"
+      }
+    },
+    {
+      "beforeText": "^\\s*(constructor|abstract\\s+rule|rule|cluster|collector)\\b(?!.*\\{).*$",
+      "action": {
+        "indentAction": "Indent"
+      }
+    }
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(bundle|constructor|abstract\\s+rule|rule|cluster|collector)\\b.*\\{\\s*(#.*)?$|^\\s*(constructor|abstract\\s+rule|rule|cluster|collector)\\b(?!.*\\{).*$",
+    "decreaseIndentPattern": "^\\s*}\\s*(#.*)?$"
+  },
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_.-]*"
+}
