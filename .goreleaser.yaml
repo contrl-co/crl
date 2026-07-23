@@ -80,10 +80,10 @@ brews:
     homepage: https://gitlab.com/contrl-group/crl
     license: Apache-2.0
     directory: Formula
-    # Flip to false once the tap repository exists.
-    skip_upload: true
+    skip_upload: false
     repository:
       owner: contrl-group
-      name: homebrew-crl
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     test: |
       assert_match "editions: v1", shell_output("#{bin}/crlc version")

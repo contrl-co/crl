@@ -55,12 +55,8 @@ More in [examples/](examples/), including facts files you can run.
 ## Install
 
 ```sh
-brew tap contrl-group/crl https://gitlab.com/contrl-group/homebrew-crl.git
+brew tap contrl-group/tap https://gitlab.com/contrl-group/homebrew-tap.git
 brew install crlc
-
-curl -fsSL https://gitlab.com/contrl-group/crl/-/raw/main/packaging/install.sh | sh
-
-go install gitlab.com/contrl-group/crl/cmd/crlc@latest
 ```
 
 Releases are reproducible builds with SHA-256 checksums, CycloneDX
