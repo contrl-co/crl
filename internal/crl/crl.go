@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -392,7 +393,20 @@ func parseDurationSeconds(literal string) (int64, error) {
 	}
 	switch match[2] {
 	case "ms":
-		return 1, nil
+		// Durations have one-second granularity, so a millisecond value is
+		// rounded UP to whole seconds (a whole-second value like 60000ms is
+		// exact; a sub-second value like 500ms rounds to 1s). Rounding up
+		// keeps an age/`>=` requirement from being under-satisfied. Returning
+		// a constant 1 regardless of magnitude — the previous behavior —
+		// silently treated 60000ms as 1s.
+		seconds := value / 1000
+		if value%1000 != 0 {
+			seconds++
+		}
+		if seconds < 1 {
+			seconds = 1
+		}
+		return checkedDurationSeconds(seconds, 1, literal)
 	case "s":
 		return checkedDurationSeconds(value, 1, literal)
 	case "m":
@@ -568,6 +582,27 @@ func parseValue(raw string) (Value, error) {
 	n, err := strconv.ParseFloat(raw, 64)
 	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 		return Value{}, fmt.Errorf("%w: invalid literal %q", ErrInvalidSyntax, raw)
+	}
+	// Reject a literal that denotes a whole number float64 cannot represent
+	// exactly. Silently rounding `== 9007199254740993` to ...992 would alter
+	// a threshold — a real hazard for a governance language comparing large
+	// amounts — and give two distinct literals one hash. The test is exact
+	// representability, NOT a magnitude threshold: many large round values
+	// (10^18, one ETH in wei) ARE exact and must compile. Deciding via
+	// big.Rat covers exponent forms too (`1e23` denotes an integer that is
+	// not representable). A literal with a genuine fractional value is
+	// inherently approximate and allowed.
+	if rat, ok := new(big.Rat).SetString(raw); ok && rat.IsInt() {
+		want := rat.Num()
+		got, _ := big.NewFloat(n).Int(nil)
+		if got.Cmp(want) != 0 {
+			return Value{}, fmt.Errorf("%w: number %q is not exactly representable (it would round to a different value)", ErrInvalidSyntax, raw)
+		}
+	}
+	// Normalize negative zero to zero so `-0` and `0` share one canonical
+	// form as well as one hash.
+	if n == 0 {
+		n = 0
 	}
 	return Value{Kind: "number", Number: n}, nil
 }
@@ -1085,6 +1120,20 @@ func subjectValuePresent(facts Facts, subject string) bool {
 }
 
 func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
+	expr, err := parseQuorumFields(fields)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeQuorumExpression(expr)
+}
+
+// parseQuorumFields tokenizes and parses a quorum expression under the
+// text-path limits (token count and nesting depth) WITHOUT normalizing.
+// It is the shared validator both entry points use: the text path parses
+// through it, and normalizeQuorumExpression trial-parses a struct-built
+// expression's rendered form through it, so both paths accept exactly the
+// same set of expressions.
+func parseQuorumFields(fields []string) (*QuorumExpression, error) {
 	tokens := quorumTokens(fields)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("%w: missing quorum expression", ErrInvalidSyntax)
@@ -1100,7 +1149,7 @@ func parseQuorumExpression(fields []string) (*QuorumExpression, error) {
 	if parser.pos != len(tokens) {
 		return nil, fmt.Errorf("%w: unexpected quorum token %q", ErrInvalidSyntax, tokens[parser.pos])
 	}
-	return normalizeQuorumExpression(expr)
+	return expr, nil
 }
 
 func quorumTokens(fields []string) []string {
@@ -1159,6 +1208,16 @@ const maxQuorumDepth = 64
 // evaluate) then overflow the stack on. Bounding token count bounds tree
 // depth for every shape.
 const maxQuorumTokens = 512
+
+// maxBundleQuorumFields caps the TOTAL quorum-expression size summed
+// across every predicate in a bundle. The per-expression cap bounds one
+// expression, but a source may pack thousands of near-cap expressions
+// into the 8 MiB source limit, and each one costs superlinear
+// normalization work — so without an aggregate bound an in-cap source can
+// still exhaust memory. This budget allows far more quorum content than
+// any real bundle (a hundred-plus maximum-size expressions) while
+// bounding the worst case.
+const maxBundleQuorumFields = 1 << 16
 
 type quorumParser struct {
 	tokens []string
@@ -1239,10 +1298,41 @@ func (p *quorumParser) match(token string) bool {
 }
 
 func normalizeQuorumExpression(expression *QuorumExpression) (*QuorumExpression, error) {
-	// depth is bounded by maxQuorumTokens: the text parser caps token count,
-	// so a tree deeper than that can only come from a caller-built struct via
-	// CompileBundleProgram, which would otherwise overflow this recursion.
-	return normalizeQuorumExpressionAt(expression, 0)
+	// The recursion depth here is bounded by maxQuorumTokens so a
+	// caller-built struct (via CompileBundleProgram) that is deeper than any
+	// text-parseable expression cannot overflow this recursion.
+	normalized, err := normalizeQuorumExpressionAt(expression, 0)
+	if err != nil {
+		return nil, err
+	}
+	// A struct-built expression may normalize cleanly here yet still render
+	// to canonical text the text parser would reject — the struct recursion
+	// counts tree nodes, while the text parser bounds token count and paren
+	// nesting, which are different quantities for the same tree. If that
+	// happened the compiler would emit canonical text it then refuses to
+	// recompile, breaking hash re-verification. Guard against it by
+	// trial-parsing the rendered form through the exact text-path validator.
+	// For the text path this is a redundant no-op (normalization only ever
+	// removes tokens and parens), so it never rejects a text-accepted input.
+	// strings.Fields matches the lexer's split of the rendered text only
+	// because operator-word subject names are rejected in normalization —
+	// `!and` is one whitespace field but two lexer tokens, the sole
+	// divergence between the two splits.
+	rendered := RenderQuorumExpression(normalized)
+	reparsed, err := parseQuorumFields(strings.Fields(rendered))
+	if err != nil {
+		return nil, err
+	}
+	// The rendered form must re-normalize to a byte-identical tree, so the
+	// canonical text a bundle carries always recompiles to the same hash.
+	renormalized, err := normalizeQuorumExpressionAt(reparsed, 0)
+	if err != nil {
+		return nil, err
+	}
+	if RenderQuorumExpression(renormalized) != rendered {
+		return nil, fmt.Errorf("%w: quorum expression does not round-trip", ErrInvalidSyntax)
+	}
+	return normalized, nil
 }
 
 func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*QuorumExpression, error) {
@@ -1258,6 +1348,12 @@ func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*Quor
 		if !identifierPattern.MatchString(name) {
 			return nil, fmt.Errorf("%w: invalid quorum subject %q", ErrInvalidSyntax, expression.Name)
 		}
+		// An operator word can never round-trip as a subject name: the
+		// rendered `!and` re-lexes as `! &`. Reject it here so no path
+		// emits canonical text the text parser then refuses.
+		if logicalFieldAlias(name) != name {
+			return nil, fmt.Errorf("%w: quorum subject %q collides with an operator word", ErrInvalidSyntax, expression.Name)
+		}
 		return &QuorumExpression{Kind: "subject", Name: name}, nil
 	case "not":
 		expr, err := normalizeQuorumExpressionAt(expression.Expr, depth+1)
@@ -1266,21 +1362,66 @@ func normalizeQuorumExpressionAt(expression *QuorumExpression, depth int) (*Quor
 		}
 		return &QuorumExpression{Kind: "not", Expr: expr}, nil
 	case "and", "or":
-		left, err := normalizeQuorumExpressionAt(expression.Left, depth+1)
+		op := normalizeIdentifier(expression.Kind)
+		// Flatten the maximal chain of this same operator into a list of
+		// operands, sort them by rendered form, and rebuild a single
+		// left-associative tree. `&` and `|` are associative and commutative,
+		// so `a & (b & c)`, `(a & b) & c`, and `c & a & b` must all normalize
+		// to one canonical tree — otherwise the flat rendered text (which
+		// carries no grouping) would re-parse (left-associative) to a
+		// different tree and a different hash, breaking round-trip
+		// verification.
+		operands, err := flattenQuorumChain(expression, op, depth)
 		if err != nil {
 			return nil, err
 		}
-		right, err := normalizeQuorumExpressionAt(expression.Right, depth+1)
-		if err != nil {
-			return nil, err
+		keyed := make([]struct {
+			node *QuorumExpression
+			key  string
+		}, len(operands))
+		for i, operand := range operands {
+			keyed[i] = struct {
+				node *QuorumExpression
+				key  string
+			}{operand, RenderQuorumExpression(operand)}
 		}
-		if RenderQuorumExpression(right) < RenderQuorumExpression(left) {
-			left, right = right, left
+		sort.SliceStable(keyed, func(i, j int) bool { return keyed[i].key < keyed[j].key })
+		node := keyed[0].node
+		for _, k := range keyed[1:] {
+			node = &QuorumExpression{Kind: op, Left: node, Right: k.node}
 		}
-		return &QuorumExpression{Kind: normalizeIdentifier(expression.Kind), Left: left, Right: right}, nil
+		return node, nil
 	default:
 		return nil, fmt.Errorf("%w: invalid quorum expression kind %q", ErrInvalidSyntax, expression.Kind)
 	}
+}
+
+// flattenQuorumChain collects the operands of a maximal chain of one
+// associative operator (`and` or `or`), normalizing each operand that is
+// not itself that same operator. Nested same-operator nodes are folded
+// in so `a & (b & c)` yields the operand list [a, b, c] regardless of the
+// authored grouping.
+func flattenQuorumChain(expression *QuorumExpression, op string, depth int) ([]*QuorumExpression, error) {
+	if depth > maxQuorumTokens {
+		return nil, fmt.Errorf("%w: quorum expression too large", ErrInvalidSyntax)
+	}
+	var operands []*QuorumExpression
+	for _, child := range []*QuorumExpression{expression.Left, expression.Right} {
+		if child != nil && normalizeIdentifier(child.Kind) == op {
+			nested, err := flattenQuorumChain(child, op, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			operands = append(operands, nested...)
+			continue
+		}
+		normalized, err := normalizeQuorumExpressionAt(child, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		operands = append(operands, normalized)
+	}
+	return operands, nil
 }
 
 func QuorumExpressionSubjects(expression *QuorumExpression) []string {
@@ -1311,34 +1452,50 @@ func QuorumExpressionSubjects(expression *QuorumExpression) []string {
 }
 
 func RenderQuorumExpression(expression *QuorumExpression) string {
+	var b strings.Builder
+	renderQuorumInto(&b, expression)
+	return b.String()
+}
+
+// renderQuorumInto writes the rendered form into b in a single pass, so
+// rendering a whole expression is O(nodes) rather than the O(n^2) that
+// repeated `left + op + right` concatenation would cost.
+func renderQuorumInto(b *strings.Builder, expression *QuorumExpression) {
 	if expression == nil {
-		return ""
+		return
 	}
 	switch expression.Kind {
 	case "subject":
-		return expression.Name
+		b.WriteString(expression.Name)
 	case "not":
-		inner := RenderQuorumExpression(expression.Expr)
+		b.WriteByte('!')
 		if expression.Expr != nil && (expression.Expr.Kind == "and" || expression.Expr.Kind == "or") {
-			return "!(" + inner + ")"
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Expr)
+			b.WriteByte(')')
+			return
 		}
-		return "!" + inner
+		renderQuorumInto(b, expression.Expr)
 	case "and", "or":
 		op := " & "
 		if expression.Kind == "or" {
 			op = " | "
 		}
-		left := RenderQuorumExpression(expression.Left)
-		right := RenderQuorumExpression(expression.Right)
 		if expression.Left != nil && expression.Kind == "and" && expression.Left.Kind == "or" {
-			left = "(" + left + ")"
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Left)
+			b.WriteByte(')')
+		} else {
+			renderQuorumInto(b, expression.Left)
 		}
-		if expression.Right != nil && (expression.Right.Kind == "or" && expression.Kind == "and") {
-			right = "(" + right + ")"
+		b.WriteString(op)
+		if expression.Right != nil && expression.Right.Kind == "or" && expression.Kind == "and" {
+			b.WriteByte('(')
+			renderQuorumInto(b, expression.Right)
+			b.WriteByte(')')
+		} else {
+			renderQuorumInto(b, expression.Right)
 		}
-		return left + op + right
-	default:
-		return ""
 	}
 }
 
@@ -1444,5 +1601,14 @@ func renderTemporalReference(reference string) string {
 }
 
 func renderNumber(number float64) string {
+	// Render a whole number as its exact integer digits. FormatFloat's
+	// shortest form can differ from the exact integer a large float
+	// represents (e.g. 2^55 renders as ...970, not ...968), and that text
+	// would fail the ingestion exactness check on recompile — canonical
+	// text must always recompile. Fractions keep their shortest form.
+	if !math.IsInf(number, 0) && number == math.Trunc(number) {
+		integer, _ := big.NewFloat(number).Int(nil)
+		return integer.String()
+	}
 	return strconv.FormatFloat(number, 'f', -1, 64)
 }

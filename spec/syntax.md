@@ -69,7 +69,12 @@ characters outside the unquoted source alphabet
 
 Numbers are finite decimals with an optional leading `-` and at most
 one decimal point. They are carried as 64-bit floating point; NaN and
-infinities are rejected.
+infinities are rejected, and a literal denoting a whole number that
+float64 cannot represent exactly is rejected rather than silently
+rounded, so a large threshold can never be quietly altered — a value
+like `10^18` (or `1e18`) that IS exact compiles and its canonical text
+renders the exact integer. Genuine fractions are approximate and
+allowed. `-0` normalizes to `0`.
 
 ### Booleans
 
@@ -81,7 +86,7 @@ A duration is a positive integer (no leading zero) plus a unit:
 
 | Unit | Meaning |
 |---|---|
-| `ms` | accepted, but the compiled duration coerces to exactly one second — sub-second precision is not representable (lint `CRL206`). The literal is preserved in the canonical text, so `ttl 500ms` and `ttl 1s` are semantically identical yet hash differently |
+| `ms` | milliseconds, rounded **up** to whole seconds — durations have one-second granularity, so `60000ms` is exactly `60s` while `500ms` rounds to `1s` (lint `CRL206` flags a sub-second value). The literal is preserved in the canonical text, so `500ms` and `1s` are equivalent yet hash differently |
 | `s` | seconds |
 | `m` | minutes |
 | `h` | hours |
@@ -156,10 +161,11 @@ package <identifier>
 bundle <identifier>
 ```
 
-Both are optional and both take exactly one name. `bundle <name> {`
-may open a block that wraps the whole bundle body. The linter warns
-when either is missing (`CRL201`, `CRL202`): a compiled bundle should
-be attributable without external context.
+Both are optional and both take exactly one name, and each may appear
+at most once — a repeated `package` or `bundle` statement is a compile
+error. `bundle <name> {` may open a block that wraps the whole bundle
+body. The linter warns when either is missing (`CRL201`, `CRL202`): a
+compiled bundle should be attributable without external context.
 
 ### rule
 
@@ -169,11 +175,10 @@ rule <name> [extends <parent>]
 
 A concrete rule's body must contain:
 
-- a `target <aspect>` — the thing the rule authorizes. Targets
-  conventionally carry a namespace segment (`permit.application`, not
-  `permit`); the linter warns otherwise (`CRL204`). Write exactly one:
-  the compiler accepts repeated `target` lines and the last one wins,
-  but relying on that is poor style;
+- exactly one `target <aspect>` — the thing the rule authorizes. A
+  repeated `target` line is a compile error. Targets conventionally
+  carry a namespace segment (`permit.application`, not `permit`); the
+  linter warns otherwise (`CRL204`);
 - one or more collectors, each declaring at least one signal;
 - one or more predicates (`need`, `block`, `quorum`).
 
@@ -246,10 +251,11 @@ cluster <name>
 
 A cluster groups concrete rules declared anywhere in the bundle
 (forward references are fine — rules always evaluate before clusters)
-and adds its own predicates. `rules` lists member rules joined by `+`. A cluster with
-no rules or no predicates is a compile error. In indentation form a
-cluster's body must be indented (unlike rules, cluster bodies get no
-top-level carve-out).
+and adds its own predicates. A cluster carries exactly one `rules`
+statement listing its member rules joined by `+` (a repeated `rules`
+statement is a compile error). A cluster with no rules or no predicates
+is a compile error. In indentation form a cluster's body must be
+indented (unlike rules, cluster bodies get no top-level carve-out).
 
 ### Predicates
 
@@ -303,9 +309,11 @@ The boolean form combines subjects with `&`/`and`, `|`/`or`,
 Precedence, tightest first: `not`, `and`, `or`.
 
 The count form requires at least `n` of the listed subjects to be
-present, where `n` is a positive integer. `count(a, b) >= n` may also
-be spelled `a + b >= n`; both render canonically as the `count()`
-form.
+present, where `n` is an integer and `1 <= n <=` the number of listed
+subjects. A threshold above the subject count can never be met and is a
+compile error, matching the `n of m` sugar. `count(a, b) >= n` may also
+be spelled `a + b >= n` (spaces around `+` are optional); both render
+canonically as the `count()` form.
 
 `n of m` is pure sugar for the count form: `quorum 2 of 3 a b c`
 compiles to exactly the same bundle — and the same hash — as
@@ -332,8 +340,11 @@ statements; `{`/`}` blocks are interchangeable with indentation.
 
 ```text
 source           = version?, package?, bundle_header?, item+
-                 ; the compiler is lenient about position and repeats
-                 ; of these three headers (last occurrence wins);
+                 ; the compiler is lenient about the POSITION of these
+                 ; three headers (a package or bundle line after a rule
+                 ; still compiles); package and bundle may each appear at
+                 ; most once (a repeat is a compile error), while a
+                 ; repeated version header is accepted, last-wins;
                  ; idiomatic source puts each once, at the top
 version          = "crl", ("v1" | "crl/v1")
 package          = "package", identifier
@@ -391,3 +402,20 @@ comparison_op    = "==" | "!=" | ">" | ">=" | "<" | "<="
 literal          = number | bool | string
 temporal_ref     = identifier | rfc3339_timestamp | "now"
 ```
+
+## Implementation limits
+
+The compiler enforces a few fixed bounds. They are rejection-only: they
+never change how a valid source compiles, and no hand-authored rule
+approaches them. An independent implementation may set its own bounds,
+but rejecting past these keeps behavior aligned with the reference
+toolchain.
+
+| Limit | Value | Applies to |
+|---|---|---|
+| Source size | 8 MiB | the whole source text |
+| Quorum expression size | 512 tokens | one `quorum` boolean expression |
+| Quorum nesting depth | 64 | parenthesis/`not` nesting in one expression |
+
+A source or expression past these bounds is a compile error, not
+undefined behavior.
