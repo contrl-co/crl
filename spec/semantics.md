@@ -46,7 +46,12 @@ reasons in a fixed precedence:
 
 `DENIED` is therefore the residual outcome: evidence was present and
 fresh, and a condition simply does not hold. The same precedence is
-applied per rule, per cluster, and for the bundle as a whole.
+applied per rule and for the bundle as a whole. A cluster applies it to
+its own checks first, then raises its result to the most severe outcome
+among its unauthorized member rules (ranked
+`EXPIRED` > `BLOCKED` > `INSUFFICIENT_EVIDENCE` > `DENIED`): a cluster
+whose own predicates all pass but which is unauthorized because a member
+failed reports that member's outcome, not a generic `DENIED`.
 
 ## Freshness (fail closed)
 
@@ -55,9 +60,13 @@ freshness cannot be proven never satisfies a rule.**
 
 For a signal declared with `ttl <duration>`:
 
-- fresh ⇔ `observed_at.<signal> + duration >= clock`;
+- fresh ⇔ `observed_at.<signal> <= clock <= observed_at.<signal> + duration`;
 - a missing or unparseable `observed_at.<signal>` fact means the age
   is unknowable → **expired**;
+- an `observed_at.<signal>` later than the clock cannot prove freshness
+  — nothing is observed in the future — so it is treated as unprovable
+  → **expired**, rather than granting a full ttl window from a future
+  instant;
 - evaluating without a clock (the clockless entry point) means
   freshness cannot be evaluated → **expired**.
 
@@ -126,10 +135,20 @@ and pass when `count >= n`. An unmet quorum fails as quorum-not-met
 
 ### quorum (boolean form)
 
-Evaluate the expression over subject presence with standard boolean
-semantics — unless any referenced subject is a declared signal whose
-freshness cannot be proven, in which case the whole check fails as
-expired (see Freshness above).
+Evaluate the expression with three-valued (Kleene) logic over subject
+state. A subject is **true** when its fact is present and truthy,
+**false** when present and not truthy, and **unknown** when no fact
+entry exists under the subject name or any of its `provider.`,
+`provider:`, `rule.`, or `cluster.` spellings. `not unknown` is
+unknown; `unknown and false` is false; `unknown or true` is true; every
+other combination involving unknown is unknown. The check passes only
+when the expression evaluates to **true**, so missing evidence can never
+be negated into a clearance (`not <absent>` does not read as satisfied),
+while an `or` with one present, satisfied branch still passes.
+
+Separately, if any referenced subject is a declared signal whose
+freshness cannot be proven, the whole check fails as expired (see
+Freshness above) regardless of the boolean structure.
 
 ## What a predicate may reference
 
@@ -212,6 +231,17 @@ bundle example.deadrule {
 The linter separately warns (`CRL203`) when multiple rules or clusters
 have **no** final policy, since "everything must authorize" may not be
 what the author meant.
+
+A final policy must be monotone in every rule and cluster: a rule or
+cluster may be *required* (`need r == true`, an un-negated quorum
+subject, a count-quorum provider) but never gated on *failing*. Because
+an unproven rule or cluster is a definite `false`, a negated reference to
+it — `quorum not r`, `block r`, `need r == false`, or even `r & !r2` —
+is satisfied precisely when its evidence is absent, which would
+authorize a decision with no evidence. All such policies are compile
+errors, and the same rule applies to a cluster's own predicates (a
+cluster publishes a boolean the policy consumes). (Negating a *signal*
+is fine: an absent signal is unknown, not false, so it fails closed.)
 
 ### Rule inheritance
 

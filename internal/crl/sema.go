@@ -3,6 +3,7 @@ package crl
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 type SymbolKind string
@@ -45,6 +46,9 @@ func AnalyzeBundle(bundle Bundle) (SemanticModel, error) {
 
 func analyzeNormalizedBundle(normalized Bundle) (SemanticModel, error) {
 	if err := validateFinalPolicyReachability(normalized); err != nil {
+		return SemanticModel{}, err
+	}
+	if err := validateFinalPolicyMonotone(normalized); err != nil {
 		return SemanticModel{}, err
 	}
 	if err := validateSignalExpiryConsistency(normalized); err != nil {
@@ -218,6 +222,136 @@ func validateFinalPolicyReachability(bundle Bundle) error {
 		}
 	}
 	return nil
+}
+
+// finalPolicyProbeClock is a fixed, non-zero evaluation instant used only
+// to test a final policy against empty evidence at compile time. It must
+// be a constant (never time.Now) so compilation stays deterministic.
+var finalPolicyProbeClock = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// validateFinalPolicyMonotone rejects a global final policy that gates on
+// a rule or cluster FAILING. An unproven rule or cluster is published as a
+// definite boolean false during evaluation, so a negated reference to it
+// (`not r`, `block r`, `need r == false`) is TRUE exactly when its
+// evidence is absent — authorizing a decision with no evidence. That must
+// never happen. The policy must be monotone non-decreasing in every rule
+// and cluster: a rule or cluster subject may appear only positively.
+// Signals may still be negated (an absent signal is unknown, not false,
+// so it fails closed under three-valued quorum logic).
+//
+// This is a structural check: an empty-facts probe alone is insufficient
+// because a positive conjunct (`r & !r2`) makes the all-false point
+// evaluate to false while a supplier who provides r's evidence and
+// withholds r2's still authorizes.
+func validateFinalPolicyMonotone(bundle Bundle) error {
+	ruleOrCluster := map[string]struct{}{}
+	for _, rule := range bundle.Rules {
+		ruleOrCluster[rule.Name] = struct{}{}
+	}
+	for _, cluster := range bundle.Clusters {
+		ruleOrCluster[cluster.Name] = struct{}{}
+	}
+	isRuleOrCluster := func(name string) bool {
+		_, ok := ruleOrCluster[normalizeIdentifier(name)]
+		return ok
+	}
+	// Cluster predicates are checked too, not just the global final policy:
+	// a cluster publishes a boolean the policy consumes positively, and a
+	// cluster predicate may reference any rule, so an inversion hidden in a
+	// cluster (`cluster g { rules keeper; block danger }`) reaches
+	// authorization exactly as a global inversion would.
+	for _, cluster := range bundle.Clusters {
+		if err := monotoneInRulesAndClusters(cluster.Predicates, isRuleOrCluster, "cluster "+cluster.Name); err != nil {
+			return err
+		}
+	}
+	if len(bundle.Predicates) == 0 {
+		return nil
+	}
+	if err := monotoneInRulesAndClusters(bundle.Predicates, isRuleOrCluster, "global final policy"); err != nil {
+		return err
+	}
+	// Secondary net: a sound final policy must also withhold on empty facts,
+	// since no rule or cluster can authorize without evidence. This catches
+	// any inverting shape the structural walk above does not enumerate.
+	probe := EvaluateBundleAt(CompiledBundle{Program: bundle}, Facts{}, finalPolicyProbeClock)
+	if probe.Authorized {
+		return fmt.Errorf("%w: global final policy authorizes with no evidence; it must require positive proof (a rule, cluster, or signal holding)", ErrInvalidSyntax)
+	}
+	return nil
+}
+
+// monotoneInRulesAndClusters rejects a predicate set that gates on a rule
+// or cluster FAILING — a negated, blocked, or required-false reference to
+// one. Such a reference is satisfied when its evidence is absent, so it
+// authorizes with no evidence. Signals may be negated freely.
+func monotoneInRulesAndClusters(predicates []Predicate, isRuleOrCluster func(string) bool, scope string) error {
+	inverted := func(field string) error {
+		return fmt.Errorf("%w: %s gates on rule or cluster %q failing; a rule or cluster may only be required positively, never negated, blocked, or required false", ErrInvalidSyntax, scope, field)
+	}
+	for _, predicate := range predicates {
+		switch predicate.Kind {
+		case PredicateBlock:
+			// block passes when the field is false; blocking a rule or
+			// cluster authorizes when it fails.
+			if isRuleOrCluster(predicate.Field) {
+				return inverted(predicate.Field)
+			}
+		case PredicateNeed:
+			// need <rc> == false / != true is anti-monotone in the subject.
+			if isRuleOrCluster(predicate.Field) && negativeBoolNeed(predicate) {
+				return inverted(predicate.Field)
+			}
+		case PredicateQuorum:
+			if predicate.Expression != nil {
+				if subject := negatedRuleOrCluster(predicate.Expression, isRuleOrCluster, false); subject != "" {
+					return inverted(subject)
+				}
+			}
+			// Count-quorum providers count presence, always positive.
+		}
+	}
+	return nil
+}
+
+// negativeBoolNeed reports whether a bool `need` is satisfied by the field
+// being false — i.e. `== false` or `!= true`.
+func negativeBoolNeed(predicate Predicate) bool {
+	if predicate.Value.Kind != "bool" {
+		return false
+	}
+	switch predicate.Operator {
+	case OperatorEQ:
+		return !predicate.Value.Bool
+	case OperatorNE:
+		return predicate.Value.Bool
+	default:
+		return false
+	}
+}
+
+// negatedRuleOrCluster returns the first rule/cluster subject that appears
+// under an odd number of negations in a quorum expression (so it is TRUE
+// when the rule/cluster fails), or "" if none does.
+func negatedRuleOrCluster(expr *QuorumExpression, isRuleOrCluster func(string) bool, negated bool) string {
+	if expr == nil {
+		return ""
+	}
+	switch expr.Kind {
+	case "subject":
+		if negated && isRuleOrCluster(expr.Name) {
+			return expr.Name
+		}
+		return ""
+	case "not":
+		return negatedRuleOrCluster(expr.Expr, isRuleOrCluster, !negated)
+	case "and", "or":
+		if subject := negatedRuleOrCluster(expr.Left, isRuleOrCluster, negated); subject != "" {
+			return subject
+		}
+		return negatedRuleOrCluster(expr.Right, isRuleOrCluster, negated)
+	}
+	return ""
 }
 
 func predicateSubjects(predicate Predicate) []string {

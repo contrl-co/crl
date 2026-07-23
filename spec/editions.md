@@ -9,8 +9,8 @@ output in a new edition — never inside an existing one.
 ## Why editions exist
 
 Content addressing only works if hashes are stable across toolchain
-releases. A stored decision that pins `sha256:998c…` must still verify
-years later, with a newer `crlc`. Editions make that a compiler
+releases. A stored decision that pins `sha256:<bundle-hash>` must still
+verify years later, with a newer `crlc`. Editions make that a compiler
 guarantee instead of a policy hope: within an edition, a toolchain
 update that changes any canonical byte or any hash for existing
 source is a bug, and CI treats it as one: a golden corpus of sources
