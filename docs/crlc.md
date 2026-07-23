@@ -114,3 +114,19 @@ evaluation := compiled.EvaluateAt(facts, now) // one of five outcomes
 The API surface is `Compile`/`CompileEdition`, `Format`, `Lint`,
 `Graph`, and `Compiled.Evaluate`/`EvaluateAt`. Compiler internals
 (AST, IR) are deliberately not exported.
+
+To inspect a compiled bundle's logical structure — its rules,
+collectors, signals, predicates, and clusters — call
+`compiled.Program()`, which returns a read-only `ProgramView`. This is
+the stable shape an embedder uses to index or feature-extract a rule
+without reaching into the hidden syntax tree or IR:
+
+```go
+for _, rule := range compiled.Program().Rules {
+	for _, predicate := range rule.Predicates {
+		// predicate.Kind is one of crl.PredicateNeed/Block/Quorum
+		_ = predicate.Field
+		_ = predicate.Operator
+	}
+}
+```
