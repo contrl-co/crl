@@ -25,7 +25,7 @@ sha256sum --check --ignore-missing checksums.txt
 ## Homebrew (macOS / Linux)
 
 ```sh
-brew tap contrl-group/crl https://gitlab.com/contrl-group/homebrew-crl.git
+brew tap contrl-group/tap https://gitlab.com/contrl-group/homebrew-tap.git
 brew install crlc
 ```
 

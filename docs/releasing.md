@@ -18,8 +18,8 @@ A release tag may be cut only when, on `main`:
 ## Cutting a release
 
 ```sh
-git tag vX.Y.Z
-git push origin vX.Y.Z
+git tag X.Y.Z
+git push origin X.Y.Z
 ```
 
 The `release` job re-runs the full test suite, then GoReleaser builds
