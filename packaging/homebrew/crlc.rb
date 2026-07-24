@@ -10,22 +10,22 @@ class Crlc < Formula
 
   on_macos do
     on_arm do
-      url "https://gitlab.com/contrl-group/crl/-/releases/v#{version}/downloads/crlc_darwin_arm64.tar.gz"
+      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_darwin_arm64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
     on_intel do
-      url "https://gitlab.com/contrl-group/crl/-/releases/v#{version}/downloads/crlc_darwin_amd64.tar.gz"
+      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_darwin_amd64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://gitlab.com/contrl-group/crl/-/releases/v#{version}/downloads/crlc_linux_arm64.tar.gz"
+      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_linux_arm64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
     on_intel do
-      url "https://gitlab.com/contrl-group/crl/-/releases/v#{version}/downloads/crlc_linux_amd64.tar.gz"
+      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_linux_amd64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
   end
