@@ -92,6 +92,10 @@ brews:
     repository:
       owner: contrl-group
       name: homebrew-tap
+      # The tap's default branch is main; without this, goreleaser
+      # commits the formula to the crl project's default branch name
+      # (develop), which does not exist on the tap, and the push 400s.
+      branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     test: |
       assert_match "editions: v1", shell_output("#{bin}/crlc version")
