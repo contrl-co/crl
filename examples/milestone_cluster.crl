@@ -1,0 +1,35 @@
+crl v1
+package examples.milestones
+bundle project.milestone
+
+# Composition: two rules, a cluster grouping them, and a global final
+# policy. Rules publish their authorization as booleans (foundation,
+# rule.foundation), clusters likewise; the final policy is the only
+# thing that decides the bundle, and it must reference every rule or
+# cluster — by its bare name; the rule./cluster. prefixes exist only
+# as fact-lookup keys at evaluation time. min_provider_trust is the
+# one reserved kernel fact: a number the evaluating host may supply
+# without any declaration.
+rule foundation
+	target construction.foundation
+	collector site_inspection inspector file_upload from /bundles/foundation.json
+		signal foundation_passed bool from inspection.passed ttl 60d
+	need foundation_passed == true
+	quorum site_inspection
+
+rule utilities
+	target construction.utilities
+	collector utility_record utility api from /bundles/utilities.json
+		signal power_connected bool from utility.power_connected ttl 60d
+		signal water_connected bool from utility.water_connected ttl 60d
+	need power_connected == true
+	need water_connected == true
+	quorum utility_record
+
+cluster construction_ready
+	rules foundation + utilities
+	need foundation == true
+
+need construction_ready == true
+need min_provider_trust >= 0.8
+quorum construction_ready & utilities

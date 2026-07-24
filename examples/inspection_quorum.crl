@@ -1,0 +1,21 @@
+crl v1
+package examples.inspection
+bundle site.inspection
+
+# The three quorum spellings side by side. Boolean quorums combine
+# subject presence with and/or/not (or &, |, !); count quorums require
+# at least n of the listed subjects; `a + b >= n` is an alternative
+# spelling of count(). All operands here are collectors or signals.
+rule site_inspection
+	target site.inspection
+	collector drone_survey surveyor api from /bundles/drone.json
+		signal coverage_percent number from survey.coverage_percent unit percent ttl 14d
+	collector field_report inspector file_upload from /bundles/field.json
+		signal field_passed bool from field.passed ttl 14d
+	collector safety_office regulator api from /bundles/safety.json
+		signal safety_hold bool from safety.hold ttl 14d
+	need coverage_percent > 95
+	quorum field_report and not safety_hold
+	quorum (drone_survey or field_report) and safety_office
+	quorum count(drone_survey, field_report) >= 1
+	quorum drone_survey + field_report + safety_office >= 2

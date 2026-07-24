@@ -1,0 +1,234 @@
+# CI for the CRL toolchain: lint -> test -> build -> package -> release.
+#
+# Tool versions are pinned; bumping one is a reviewed change. Release
+# jobs run only on semver tags (vX.Y.Z) and sign artifacts with keyless
+# cosign via GitLab OIDC — no long-lived signing key exists anywhere in
+# this pipeline.
+
+stages:
+  - lint
+  - test
+  - build
+  - package
+  - release
+
+variables:
+  GO_IMAGE: golang:1.25.4
+  NODE_IMAGE: node:22.12.0
+  GORELEASER_IMAGE: goreleaser/goreleaser:v2.6.1
+  TRIVY_IMAGE: aquasec/trivy:0.58.1
+  GRYPE_VERSION: v0.86.1
+  GOFLAGS: -mod=readonly
+  # Pin the toolchain to the go.mod version. The goreleaser image ships an
+  # older Go with GOTOOLCHAIN=local, which cannot build this module; this
+  # overrides it so every job builds with exactly Go 1.25.4.
+  GOTOOLCHAIN: go1.25.4
+  GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
+  GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+
+.go-cache: &go-cache
+  cache:
+    key: go-$CI_COMMIT_REF_SLUG
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
+
+gofmt-vet:
+  stage: lint
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files need formatting"; exit 1; }'
+    - go vet ./...
+
+# --- Merge-request gates ---------------------------------------------
+# MR-pipeline-only jobs enforcing review policy the settings UI cannot
+# (see CONTRIBUTING.md, "Merge gates"). All three must be green to
+# merge once "pipeline must succeed" is enabled on the project.
+
+# Every MR needs at least one label (Fix, Feature, Chore, ...) so the
+# release changelog automation can classify it, and a DO NOT MERGE
+# label fails the pipeline. Labels are read at pipeline start; changing
+# them later does not rerun a finished pipeline, so re-run before
+# merging.
+mr-labels:
+  stage: lint
+  image: alpine:3.21
+  script:
+    - |
+      if [ -z "$CI_MERGE_REQUEST_LABELS" ]; then
+        echo "MR has no labels; add one (Fix, Feature, Chore, ...) so release automation can classify it"
+        exit 1
+      fi
+      labels=$(printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr '[:lower:]' '[:upper:]')
+      case ",$labels," in
+        *",DO NOT MERGE,"*) echo "MR carries the DO NOT MERGE label; refusing"; exit 1;;
+        *) echo "label check passed";;
+      esac
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# A compiler change that moves hashes of unchanged source must carry a
+# "hashes moved" CHANGELOG entry (spec/editions.md).
+mr-hash-disclosure:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - git fetch -q origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - sh scripts/ci/check-hash-disclosure.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# A test file added by an MR must fail against the base implementation,
+# or it pins nothing.
+mr-new-tests-pin:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - git fetch -q origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - sh scripts/ci/check-new-tests-pin.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+test:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    # Includes the golden-corpus determinism gate, the canonical
+    # round-trip test, and docs-lint (every fenced crl block in every
+    # markdown file compiles — or provably fails, for counterexamples).
+    - go test ./... -count=1
+
+# Every fenced ```crl block in every markdown file must compile (or
+# provably fail, for expect-error counterexamples). A non-compiling
+# documentation example can never ship.
+docs-lint:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - go test . -run TestDocsCRLBlocks -count=1 -v
+
+examples-lint:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  script:
+    - go run ./cmd/crlc lint examples/
+    - go run ./cmd/crlc eval -facts examples/facts/permit_quorum_2of3.authorized.json -at 2026-06-02T00:00:00Z -require-authorized examples/permit_quorum_2of3.crl
+
+# Cross-platform determinism: the golden test must produce
+# identical hashes on every OS/arch. Shared gitlab.com runners are
+# linux/amd64; enable the tagged jobs below when macOS/Windows runners
+# are attached to the project.
+golden-linux-arm64:
+  stage: test
+  image: $GO_IMAGE
+  <<: *go-cache
+  tags: [saas-linux-small-arm64]
+  script:
+    - go test . -run 'TestExamplesMatchGoldenHashes|TestExamplesCanonicalRoundTrip' -count=1
+  rules:
+    - if: $CI_COMMIT_BRANCH || $CI_COMMIT_TAG
+      allow_failure: true # flip to hard-fail once arm64 runner quota is confirmed
+
+# golden-macos:
+#   stage: test
+#   tags: [saas-macos-medium-m1]
+#   script: [ "go test . -run TestExamplesMatchGoldenHashes -count=1" ]
+# golden-windows:
+#   stage: test
+#   tags: [saas-windows-medium-amd64]
+#   script: [ "go test . -run TestExamplesMatchGoldenHashes -count=1" ]
+
+snapshot-build:
+  stage: build
+  image:
+    name: $GORELEASER_IMAGE
+    entrypoint: [""]
+  script:
+    - goreleaser build --snapshot --clean
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+vscode-extension:
+  stage: package
+  image: $NODE_IMAGE
+  script:
+    - cd editors/vscode
+    - npm run check
+    - npx --yes @vscode/vsce@3.2.1 package --out crl-language-support.vsix
+  artifacts:
+    paths: [editors/vscode/crl-language-support.vsix]
+    expire_in: 1 week
+
+trivy-scan:
+  stage: test
+  image:
+    name: $TRIVY_IMAGE
+    entrypoint: [""]
+  script:
+    - trivy fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+
+grype-scan:
+  stage: test
+  # The anchore/grype image is distroless (no shell), so GitLab cannot run a
+  # script in it. Install the pinned grype binary into a shell image instead;
+  # the version-tagged install script pins both the script and the binary.
+  image: alpine:3.21
+  before_script:
+    - apk add --no-cache curl
+    - curl -sSfL "https://raw.githubusercontent.com/anchore/grype/$GRYPE_VERSION/install.sh" | sh -s -- -b /usr/local/bin "$GRYPE_VERSION"
+  script:
+    - grype dir:. --fail-on high
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+
+release:
+  stage: release
+  image:
+    name: $GORELEASER_IMAGE
+    entrypoint: [""]
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
+  variables:
+    GITLAB_TOKEN: $CI_JOB_TOKEN
+  before_script:
+    # goreleaser image ships syft; cosign is installed pinned.
+    - apk add --no-cache cosign=~2
+  script:
+    - go test ./... -count=1 # nothing releases around a red gate
+    - goreleaser release --clean
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+release-vsix:
+  stage: release
+  image: $NODE_IMAGE
+  script:
+    - cd editors/vscode
+    - npm run check
+    - npx --yes @vscode/vsce@3.2.1 package --out crl-language-support-$CI_COMMIT_TAG.vsix
+    # Marketplace publication requires VSCE_PAT (a marketplace token);
+    # the job packages unconditionally and publishes when the token is
+    # configured, so releases do not silently depend on a secret.
+    - if [ -n "$VSCE_PAT" ]; then npx --yes @vscode/vsce@3.2.1 publish --packagePath crl-language-support-$CI_COMMIT_TAG.vsix; else echo "VSCE_PAT not set; skipping marketplace publish"; fi
+  artifacts:
+    paths: [editors/vscode/crl-language-support-*.vsix]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
