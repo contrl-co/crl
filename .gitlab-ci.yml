@@ -1,7 +1,7 @@
 # CI for the CRL toolchain: lint -> test -> build -> package -> release.
 #
 # Tool versions are pinned; bumping one is a reviewed change. Release
-# jobs run only on semver tags (vX.Y.Z) and sign artifacts with keyless
+# jobs run only on semver tags (X.Y.Z, optional -prerelease) and sign artifacts with keyless
 # cosign via GitLab OIDC — no long-lived signing key exists anywhere in
 # this pipeline.
 
@@ -215,7 +215,7 @@ release:
     - go test ./... -count=1 # nothing releases around a red gate
     - goreleaser release --clean
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(-.+)?$/
 
 release-vsix:
   stage: release
@@ -231,4 +231,4 @@ release-vsix:
   artifacts:
     paths: [editors/vscode/crl-language-support-*.vsix]
   rules:
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(-.+)?$/
