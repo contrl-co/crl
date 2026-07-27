@@ -2,8 +2,8 @@
 
 Thanks for looking at CRL. This repository is the public home of the
 CRL language: the specification, the `crlc` toolchain, the examples,
-and the editor tooling. It is developed in the open, for free use
-(final license text pending review — see the README).
+and the editor tooling. It is free software, developed in the open
+under the AGPL-3.0 (see the README).
 
 One boundary up front: **the CONTRL platform is closed source.** The
 governance services, audit chain, registry, and everything else that
