@@ -86,7 +86,7 @@ brews:
     ids: [crlc]
     description: "CRL (CONTRL Rule Language) toolchain: lint, compile, fmt, eval, graph"
     homepage: https://gitlab.com/contrl-group/crl
-    license: Apache-2.0
+    license: AGPL-3.0-only
     directory: Formula
     skip_upload: false
     repository:
