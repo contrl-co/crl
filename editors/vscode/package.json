@@ -99,7 +99,7 @@
   "bugs": {
     "url": "https://gitlab.com/contrl-group/crl/-/issues"
   },
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "keywords": [
     "crl",
     "contrl",
