@@ -81,8 +81,8 @@ extracted and compiled in CI. If it's written down here, it compiles.
 
 This is the public home of the CRL **language**: specification,
 compiler front-end, linter, formatter, local evaluator, graph
-projection, examples, and editor tooling. All of it is meant to be
-used freely, in the open (license finalization pending — see below).
+projection, examples, and editor tooling. All of it is free software,
+in the open, under the AGPL — see [License](#license).
 
 The CONTRL **platform** — the operated services that bind rules to
 real evidence streams and record decisions in a verifiable audit
@@ -94,14 +94,17 @@ the platform is accountable for operating it.
 
 ## License
 
-Code and specification are licensed under [Apache-2.0](LICENSE).
+Code and specification are licensed under
+[AGPL-3.0](LICENSE) (GNU Affero General Public License, version 3).
 The CRL and CONTRL names are trademarks — see
 [TRADEMARKS.md](TRADEMARKS.md).
 
-> **Licensing status: DRAFT, pending legal review.** Apache-2.0 for
-> the toolchain and spec is the current working default; counsel may
-> instead direct a no-derivatives license for the specification text.
-> Nothing here is a final grant until this notice is removed.
+The AGPL is a strong copyleft license: you may use, study, modify, and
+redistribute CRL freely, and if you run a modified version as a
+network service you must offer its users the corresponding source
+(AGPL §13). Contrl holds the copyright to CRL and can additionally
+license it under other terms — contact us if the AGPL does not fit
+your deployment.
 
 ## Contributing
 
