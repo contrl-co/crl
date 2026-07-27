@@ -6,7 +6,7 @@ class Crlc < Formula
   desc "CRL (CONTRL Rule Language) toolchain: lint, compile, fmt, eval, graph"
   homepage "https://gitlab.com/contrl-group/crl"
   version "0.0.0-dev"
-  license "Apache-2.0"
+  license "AGPL-3.0-only"
 
   on_macos do
     on_arm do
