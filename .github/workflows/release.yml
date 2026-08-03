@@ -71,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
-            echo "::error::HOMEBREW_TAP_TOKEN is required to publish the version-pinned formula."
+            echo "::error::HOMEBREW_TAP_TOKEN is required to open the version-pinned formula PR."
             exit 1
           fi
       - name: Package VS Code extension
@@ -111,6 +111,23 @@ jobs:
           distribution: goreleaser
           version: v2.6.1
           args: release --clean
+      - name: Require a reviewable Homebrew update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          branch="release/crlc-${version}"
+          pull_count="$(gh api --method GET repos/contrl-co/homebrew-tap/pulls \
+            -f state=open \
+            -f head="contrl-co:${branch}" \
+            -f base=main \
+            --jq 'length')"
+          if [ "$pull_count" -ne 1 ]; then
+            echo "::error::Expected one open Homebrew update PR from ${branch}; found ${pull_count}."
+            exit 1
+          fi
       - name: Publish VS Code extension when configured
         if: env.VSCE_PAT != ''
         working-directory: editors/vscode

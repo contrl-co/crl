@@ -35,7 +35,13 @@ GoReleaser builds all platforms reproducibly, generates SBOMs, writes
 identity — there is no long-lived signing key to rotate or leak), and
 publishes the GitHub release. The workflow includes the editor extension
 in the same release and publishes it to the marketplace when a token is
-configured.
+configured. It pushes the generated Homebrew formula to a version-specific
+branch in `contrl-co/homebrew-tap` and opens a pull request against protected
+`main`; the release fails if that PR is not observable. A CODEOWNER must review
+the formula and its `Gate summary` must pass before Homebrew users receive the
+update. The tap credential therefore needs only contents and pull-request write
+access to that repository; it does not need or receive a branch-protection
+bypass.
 
 ## Rollback playbook
 
