@@ -13,7 +13,7 @@ stages:
   - release
 
 variables:
-  GO_IMAGE: golang:1.25.4
+  GO_IMAGE: golang:1.25.12
   NODE_IMAGE: node:22.12.0
   GORELEASER_IMAGE: goreleaser/goreleaser:v2.6.1
   TRIVY_IMAGE: aquasec/trivy:0.58.1
@@ -21,8 +21,8 @@ variables:
   GOFLAGS: -mod=readonly
   # Pin the toolchain to the go.mod version. The goreleaser image ships an
   # older Go with GOTOOLCHAIN=local, which cannot build this module; this
-  # overrides it so every job builds with exactly Go 1.25.4.
-  GOTOOLCHAIN: go1.25.4
+  # overrides it so every job builds with exactly Go 1.25.12.
+  GOTOOLCHAIN: go1.25.12
   GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
   GOCACHE: $CI_PROJECT_DIR/.cache/go-build
 
