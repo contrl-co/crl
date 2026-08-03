@@ -30,6 +30,12 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Changed
 
+- The canonical repository, Go module, release workflow, Homebrew tap,
+  security reporting, and contributor links now use the `contrl-co`
+  GitHub organization. The three releases copied from GitLab retain
+  their original keyless signing identity and are accepted only through
+  checksum-pinned compatibility rules; new releases use the GitHub
+  Actions workload identity.
 - **Bundle hashes moved for bundles containing `<`/`>` comparisons.**
   The canonical JSON encoder no longer HTML-escapes `<`, `>`, and `&`,
   so the operator `>=` is hashed as `>=` rather than `>=`. This is
