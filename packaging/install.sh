@@ -67,7 +67,7 @@ if command -v cosign >/dev/null 2>&1; then
   if cosign verify-blob \
     --certificate "$workdir/checksums.txt.pem" \
     --signature "$workdir/checksums.txt.sig" \
-    --certificate-identity-regexp '^https://github\.com/contrl-co/crl/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' \
+    --certificate-identity-regexp '^https://github\.com/contrl-co/crl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
     "$workdir/checksums.txt" >/dev/null 2>&1; then
     echo "verified GitHub Actions release identity"

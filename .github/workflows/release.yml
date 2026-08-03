@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - "*.*.*"
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -26,12 +26,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Require an unprefixed semantic version on main
+      - name: Require a v-prefixed semantic version on main
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-            echo "::error::Release tag is not an unprefixed semantic version: $GITHUB_REF_NAME"
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Release tag is not a v-prefixed semantic version: $GITHUB_REF_NAME"
             exit 1
           fi
           git fetch --no-tags origin main:refs/remotes/origin/main
