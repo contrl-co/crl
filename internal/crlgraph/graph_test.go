@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gitlab.com/contrl-group/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crl"
 )
 
 // fundingRuleSource is the single-rule worked example from docs/crl-language.md.

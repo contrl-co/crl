@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	crl "gitlab.com/contrl-group/crl"
+	crl "github.com/contrl-co/crl"
 )
 
 func main() {

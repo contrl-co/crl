@@ -94,11 +94,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/contrl-group/crl.git",
+    "url": "https://github.com/contrl-co/crl.git",
     "directory": "editors/vscode"
   },
   "bugs": {
-    "url": "https://gitlab.com/contrl-group/crl/-/issues"
+    "url": "https://github.com/contrl-co/crl/issues"
   },
   "license": "AGPL-3.0-only",
   "keywords": [

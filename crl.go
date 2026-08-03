@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	lang "gitlab.com/contrl-group/crl/internal/crl"
-	"gitlab.com/contrl-group/crl/internal/crlgraph"
-	"gitlab.com/contrl-group/crl/internal/crllint"
+	lang "github.com/contrl-co/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crlgraph"
+	"github.com/contrl-co/crl/internal/crllint"
 )
 
 // EditionV1 is the current (and only) CRL edition. An edition is a

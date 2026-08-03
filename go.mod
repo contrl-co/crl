@@ -1,4 +1,4 @@
-module gitlab.com/contrl-group/crl
+module github.com/contrl-co/crl
 
 go 1.25.12
 
