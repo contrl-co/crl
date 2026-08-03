@@ -88,10 +88,16 @@ brews:
     repository:
       owner: contrl-co
       name: homebrew-tap
-      # The tap's default branch is main; without this, goreleaser
-      # commits the formula to the crl project's default branch name
-      # (develop), which does not exist on the tap, and the push 400s.
-      branch: main
+      # The protected tap rejects direct release pushes. Generate one branch
+      # per version and open a reviewable PR against main instead.
+      branch: "release/crlc-{{ .Version }}"
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: contrl-co
+          name: homebrew-tap
+          branch: main
     test: |
       assert_match "editions: v1", shell_output("#{bin}/crlc version")
