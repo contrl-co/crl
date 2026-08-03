@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.com/contrl-group/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crl"
 )
 
 func build(t *testing.T, source string) Graph {

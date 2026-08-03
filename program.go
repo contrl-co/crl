@@ -1,6 +1,6 @@
 package crl
 
-import lang "gitlab.com/contrl-group/crl/internal/crl"
+import lang "github.com/contrl-co/crl/internal/crl"
 
 // Predicate kinds, as they appear in a PredicateView.Kind. An embedder
 // matches against these rather than hardcoding the strings.
