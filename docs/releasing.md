@@ -18,9 +18,16 @@ A release tag may be cut only when, on `main`:
 ## Cutting a release
 
 ```sh
-git tag X.Y.Z
-git push origin X.Y.Z
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
+
+`vX.Y.Z` is the only tag spelling for new releases. It is simultaneously the
+GitHub release tag and the version consumed by Go modules; GoReleaser strips
+the leading `v` when it renders binary and Homebrew version strings. The
+migrated `0.1.0-beta04`, `0.1.0-beta05`, and `0.1.0` tags remain immutable
+historical releases, and the existing `v0.1.0` alias remains the Go module tag
+for the same `0.1.0` commit.
 
 The GitHub Actions `release` workflow re-runs the full test suite, then
 GoReleaser builds all platforms reproducibly, generates SBOMs, writes
