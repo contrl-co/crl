@@ -8,7 +8,7 @@ under the AGPL-3.0 (see the README).
 One boundary up front: **the CONTRL platform is closed source.** The
 governance services, audit chain, registry, and everything else that
 *operates* CRL decisions in production live elsewhere and are not open
-to contribution here. Issues or merge requests that try to
+to contribution here. Issues or pull requests that try to
 reconstruct, interface with, or expose platform internals will be
 closed.
 
@@ -29,19 +29,19 @@ closed.
   bundle hashes are frozen within an edition; a change to either is by
   definition a new edition (see [spec/editions.md](spec/editions.md))
   and needs an accepted design issue before any code. The golden
-  corpus test will fail your MR otherwise — that is working as
+  corpus test will fail your PR otherwise — that is working as
   intended.
 - New language features, new lint rules with `error` severity, new
   CLI commands.
 
 ## Mechanics
 
-- Branch + merge request; no direct pushes to `main`.
+- Branch + pull request; no direct pushes to `main`.
 - Small, reviewable commits: one logical change per commit, mechanical
   changes (renames, moves) separated from behavior changes.
 - Tests land with the behavior they pin; docs land with the change
   they describe.
-- Every MR must be green: `gofmt`, `go vet`, `go test ./...` (which
+- Every PR must be green: `gofmt`, `go vet`, `go test ./...` (which
   includes the golden corpus, canonical round-trip, and docs-lint
   gates), and the extension's `npm run check` if you touched
   `editors/vscode`.
@@ -50,14 +50,14 @@ closed.
 
 ## Merge gates
 
-CI enforces these on every MR pipeline, for human and AI-authored
+CI enforces these on every pull request, for human and AI-authored
 changes alike:
 
-- Every MR carries at least one label (`Fix`, `Feature`, `Chore`,
+- Every PR carries at least one label (`Fix`, `Feature`, `Chore`,
   ...). Labels feed the changelog automation planned for releases.
 - A `DO NOT MERGE` label fails the pipeline.
-- A test file added by an MR must fail against the base
-  implementation (`mr-new-tests-pin`). A new test that passes on the
+- A test file added by a PR must fail against the base
+  implementation (`Review regression gates`). A new test that passes on the
   old code pins nothing.
 - A compiler change that moves hashes of unchanged source needs a
   "hashes moved" CHANGELOG entry (`mr-hash-disclosure`), per
@@ -65,7 +65,7 @@ changes alike:
 
 Reviewers enforce the rest:
 
-- Claims in an MR description name the test or repro that proves
+- Claims in a PR description name the test or repro that proves
   them. The reviewer checks at least the headline claim before
   approving.
 - Changes too large to review commit-by-commit get split first. That
