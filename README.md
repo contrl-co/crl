@@ -55,7 +55,7 @@ More in [examples/](examples/), including facts files you can run.
 ## Install
 
 ```sh
-brew tap contrl-group/tap https://gitlab.com/contrl-group/homebrew-tap.git
+brew tap contrl-co/tap https://github.com/contrl-co/homebrew-tap.git
 brew install crlc
 ```
 

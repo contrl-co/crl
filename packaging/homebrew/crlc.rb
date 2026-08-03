@@ -4,28 +4,28 @@
 # the formula be reviewed like any other source file.
 class Crlc < Formula
   desc "CRL (CONTRL Rule Language) toolchain: lint, compile, fmt, eval, graph"
-  homepage "https://gitlab.com/contrl-group/crl"
+  homepage "https://github.com/contrl-co/crl"
   version "0.0.0-dev"
   license "AGPL-3.0-only"
 
   on_macos do
     on_arm do
-      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_darwin_arm64.tar.gz"
+      url "https://github.com/contrl-co/crl/releases/download/#{version}/crlc_darwin_arm64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
     on_intel do
-      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_darwin_amd64.tar.gz"
+      url "https://github.com/contrl-co/crl/releases/download/#{version}/crlc_darwin_amd64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_linux_arm64.tar.gz"
+      url "https://github.com/contrl-co/crl/releases/download/#{version}/crlc_linux_arm64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
     on_intel do
-      url "https://gitlab.com/contrl-group/crl/-/releases/#{version}/downloads/crlc_linux_amd64.tar.gz"
+      url "https://github.com/contrl-co/crl/releases/download/#{version}/crlc_linux_amd64.tar.gz"
       sha256 "REPLACED_AT_RELEASE"
     end
   end
