@@ -19,9 +19,8 @@ on:
 concurrency:
   # merge_group has no PR number; github.ref is unique per queue entry, so
   # queued runs never cancel each other. develop pushes must queue, not
-  # cancel: a cancelled push run would still execute the always() gate,
-  # stamp a red "ci / gate" on an already-merged commit, and lose its
-  # snapshot artifact.
+  # cancel: a cancelled push run would still execute the always() gate and
+  # stamp a red "ci / gate" on an already-merged commit.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
@@ -154,24 +153,6 @@ jobs:
           cache-dependency-path: go.sum
       - run: go test . -run 'TestExamplesMatchGoldenHashes|TestExamplesCanonicalRoundTrip' -count=1
 
-  # goreleaser build only: nothing publishes, so the GitLab-specific
-  # release/brews config in .goreleaser.yaml stays inert until the release
-  # workflow port lands.
-  snapshot:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
-      - run: go run github.com/goreleaser/goreleaser/v2@v2.6.1 build --snapshot --clean
-      - uses: actions/upload-artifact@v7
-        with:
-          name: snapshot-dist
-          path: dist/
-          retention-days: 7
-
   vscode-extension:
     runs-on: ubuntu-latest
     defaults:
@@ -187,14 +168,11 @@ jobs:
           # and fail the lockfile-less setup.
           package-manager-cache: false
       # The check script needs no install: the extension has zero runtime
-      # and dev dependencies, and vsce runs through npx.
+      # and dev dependencies, and vsce runs through npx. Packaging here
+      # only proves the extension packs; the installable vsix ships from
+      # the release workflow, binaries are release-only artifacts.
       - run: npm run check
       - run: npx --yes @vscode/vsce@3.2.1 package --out crl-language-support.vsix
-      - uses: actions/upload-artifact@v7
-        with:
-          name: crl-language-support-vsix
-          path: editors/vscode/crl-language-support.vsix
-          retention-days: 7
 
   # Blocking scans on PRs and queue entries, matching the GitLab MR
   # pipeline. The weekly non-blocking sweep lives in audit.yml. Tool
@@ -231,7 +209,6 @@ jobs:
       - hash-disclosure
       - new-tests-pin
       - golden-arm64
-      - snapshot
       - vscode-extension
       - trivy
       - grype
