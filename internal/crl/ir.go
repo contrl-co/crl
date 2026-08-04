@@ -115,14 +115,7 @@ func lowerCollectors(collectors []Collector) []IRCollector {
 func lowerSignals(signals []Signal) []IRSignal {
 	out := make([]IRSignal, 0, len(signals))
 	for _, signal := range signals {
-		out = append(out, IRSignal{
-			Name:        signal.Name,
-			Kind:        signal.Kind,
-			SourceField: signal.SourceField,
-			Unit:        signal.Unit,
-			Optional:    signal.Optional,
-			Expiry:      signal.Expiry,
-		})
+		out = append(out, IRSignal(signal))
 	}
 	return out
 }
