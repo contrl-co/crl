@@ -432,49 +432,6 @@ func checkedDurationSeconds(value int64, unitSeconds int64, literal string) (int
 	return value * unitSeconds, nil
 }
 
-func validatePredicateCoverage(predicate Predicate, signalKinds map[string]string, collectorNames map[string]struct{}) error {
-	if predicate.Kind == PredicateNeed || predicate.Kind == PredicateBlock {
-		kind, ok := kernelDerivedKind(predicate.Field)
-		if !ok {
-			kind, ok = signalKinds[predicate.Field]
-		}
-		if !ok {
-			return fmt.Errorf("%w: %s", ErrMissingSignal, predicate.Field)
-		}
-		return validatePredicateType(predicate, kind)
-	}
-	if predicate.Kind == PredicateQuorum {
-		if predicate.Expression != nil {
-			for _, subject := range QuorumExpressionSubjects(predicate.Expression) {
-				if _, ok := collectorNames[subject]; ok {
-					continue
-				}
-				if _, ok := signalKinds[subject]; ok {
-					continue
-				}
-				return fmt.Errorf("%w: quorum subject %s", ErrMissingSignal, subject)
-			}
-			return nil
-		}
-		for _, provider := range predicate.Providers {
-			if _, ok := collectorNames[provider]; !ok {
-				return fmt.Errorf("%w: quorum provider %s", ErrMissingSignal, provider)
-			}
-		}
-	}
-	if predicate.Kind == PredicateTemporal {
-		kind, ok := signalKinds[predicate.Field]
-		if !ok {
-			return fmt.Errorf("%w: %s", ErrMissingSignal, predicate.Field)
-		}
-		return validateTemporalPredicate(predicate, kind, func(field string) (string, bool) {
-			kind, ok := signalKinds[field]
-			return kind, ok
-		})
-	}
-	return nil
-}
-
 func kernelDerivedKind(field string) (string, bool) {
 	switch field {
 	case "min_provider_trust":

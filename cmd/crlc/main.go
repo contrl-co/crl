@@ -57,7 +57,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	tracked := &errorTrackingWriter{w: stdout}
 	code := dispatch(args, stdin, tracked, stderr)
 	if code == 0 && tracked.err != nil {
-		fmt.Fprintf(stderr, "crlc: writing output: %v\n", tracked.err)
+		if _, err := fmt.Fprintf(stderr, "crlc: writing output: %v\n", tracked.err); err != nil {
+			return 1
+		}
 		return 1
 	}
 	return code
@@ -65,7 +67,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		usage(stderr)
+		if err := usage(stderr); err != nil {
+			return 2
+		}
 		return 2
 	}
 	command, rest := args[0], args[1:]
@@ -81,20 +85,28 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "graph":
 		return runGraph(rest, stdin, stdout, stderr)
 	case "version":
-		fmt.Fprintf(stdout, "crlc %s (editions: %s)\n", version, crl.EditionV1)
+		if _, err := fmt.Fprintf(stdout, "crlc %s (editions: %s)\n", version, crl.EditionV1); err != nil {
+			return 1
+		}
 		return 0
 	case "help", "-h", "--help":
-		usage(stdout)
+		if err := usage(stdout); err != nil {
+			return 1
+		}
 		return 0
 	default:
-		fmt.Fprintf(stderr, "crlc: unknown command %q\n", command)
-		usage(stderr)
+		if _, err := fmt.Fprintf(stderr, "crlc: unknown command %q\n", command); err != nil {
+			return 2
+		}
+		if err := usage(stderr); err != nil {
+			return 2
+		}
 		return 2
 	}
 }
 
-func usage(w io.Writer) {
-	fmt.Fprint(w, `usage: crlc <command> [flags] [path ...]
+func usage(w io.Writer) error {
+	_, err := fmt.Fprint(w, `usage: crlc <command> [flags] [path ...]
 
 commands:
   lint      lint CRL sources and report CRL### diagnostics
@@ -107,6 +119,7 @@ commands:
 Commands read stdin when no path is given. Run a command with -h for
 its flags.
 `)
+	return err
 }
 
 // --- lint -----------------------------------------------------------
@@ -129,18 +142,24 @@ func runLint(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	threshold, failEnabled, err := parseFailOn(*failOn)
 	if err != nil {
-		fmt.Fprintf(stderr, "crlc lint: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc lint: %v\n", err); writeErr != nil {
+			return 2
+		}
 		return 2
 	}
 	if *format != "text" && *format != "json" {
-		fmt.Fprintf(stderr, "crlc lint: unsupported format %q\n", *format)
+		if _, err := fmt.Fprintf(stderr, "crlc lint: unsupported format %q\n", *format); err != nil {
+			return 2
+		}
 		return 2
 	}
 
 	opts := crllint.Options{IncludeCanonical: *includeCanonical}
 	reports, readErr := lintInputs(flags.Args(), stdin, opts)
 	if readErr != nil {
-		fmt.Fprintf(stderr, "crlc lint: %v\n", readErr)
+		if _, err := fmt.Fprintf(stderr, "crlc lint: %v\n", readErr); err != nil {
+			return 2
+		}
 		return 2
 	}
 	failed := false
@@ -156,9 +175,13 @@ func runLint(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
 		encoder.SetIndent("", "  ")
-		_ = encoder.Encode(lintOutput{OK: !failed, Reports: reports})
+		if err := encoder.Encode(lintOutput{OK: !failed, Reports: reports}); err != nil {
+			return 1
+		}
 	default:
-		writeLintText(stdout, reports, *quiet)
+		if err := writeLintText(stdout, reports, *quiet); err != nil {
+			return 1
+		}
 	}
 	if failed {
 		return 1
@@ -241,12 +264,12 @@ func parseFailOn(value string) (crllint.Severity, bool, error) {
 	}
 }
 
-func writeLintText(w io.Writer, reports []crllint.Report, quiet bool) {
+func writeLintText(w io.Writer, reports []crllint.Report, quiet bool) error {
 	count := 0
 	for _, report := range reports {
 		for _, diagnostic := range report.Diagnostics {
 			count++
-			fmt.Fprintf(
+			if _, err := fmt.Fprintf(
 				w,
 				"%s:%d:%d: %s %s: %s\n",
 				diagnostic.Path,
@@ -255,16 +278,21 @@ func writeLintText(w io.Writer, reports []crllint.Report, quiet bool) {
 				diagnostic.Severity,
 				diagnostic.Code,
 				diagnostic.Message,
-			)
+			); err != nil {
+				return err
+			}
 		}
 	}
 	if count == 0 && !quiet {
 		if len(reports) == 1 {
-			fmt.Fprintf(w, "%s: ok\n", reports[0].Path)
-			return
+			_, err := fmt.Fprintf(w, "%s: ok\n", reports[0].Path)
+			return err
 		}
-		fmt.Fprintf(w, "%d CRL files: ok\n", len(reports))
+		if _, err := fmt.Fprintf(w, "%d CRL files: ok\n", len(reports)); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // --- compile --------------------------------------------------------
@@ -287,7 +315,9 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *format != "text" && *format != "json" {
-		fmt.Fprintf(stderr, "crlc compile: unsupported format %q\n", *format)
+		if _, err := fmt.Fprintf(stderr, "crlc compile: unsupported format %q\n", *format); err != nil {
+			return 2
+		}
 		return 2
 	}
 	source, code := readSource(flags.Args(), stdin, stderr, "crlc compile")
@@ -299,26 +329,36 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
 		if err != nil {
-			_ = encoder.Encode(compileOutput{OK: false, Error: err.Error()})
+			if encodeErr := encoder.Encode(compileOutput{OK: false, Error: err.Error()}); encodeErr != nil {
+				return 1
+			}
 			return 1
 		}
-		_ = encoder.Encode(compileOutput{
+		if encodeErr := encoder.Encode(compileOutput{
 			OK:            true,
 			Edition:       compiled.Edition,
 			SourceHash:    compiled.SourceHash,
 			CanonicalText: compiled.CanonicalText,
 			Hash:          compiled.Hash,
-		})
+		}); encodeErr != nil {
+			return 1
+		}
 		return 0
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "crlc compile: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc compile: %v\n", err); writeErr != nil {
+			return 1
+		}
 		return 1
 	}
 	// The trailing hash line is a CRL comment, so the output as a whole
 	// is still valid, lintable CRL.
-	fmt.Fprintln(stdout, compiled.CanonicalText)
-	fmt.Fprintf(stdout, "# sha256:%s\n", compiled.Hash)
+	if _, err := fmt.Fprintln(stdout, compiled.CanonicalText); err != nil {
+		return 1
+	}
+	if _, err := fmt.Fprintf(stdout, "# sha256:%s\n", compiled.Hash); err != nil {
+		return 1
+	}
 	return 0
 }
 
@@ -333,7 +373,9 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	paths := flags.Args()
 	if *write && len(paths) == 0 {
-		fmt.Fprintln(stderr, "crlc fmt: -w requires a file path")
+		if _, err := fmt.Fprintln(stderr, "crlc fmt: -w requires a file path"); err != nil {
+			return 2
+		}
 		return 2
 	}
 	if !*write {
@@ -343,31 +385,43 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		formatted, err := crl.Format(source)
 		if err != nil {
-			fmt.Fprintf(stderr, "crlc fmt: %v\n", err)
+			if _, writeErr := fmt.Fprintf(stderr, "crlc fmt: %v\n", err); writeErr != nil {
+				return 1
+			}
 			return 1
 		}
-		fmt.Fprint(stdout, formatted)
+		if _, err := fmt.Fprint(stdout, formatted); err != nil {
+			return 1
+		}
 		return 0
 	}
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
 		if err != nil {
-			fmt.Fprintf(stderr, "crlc fmt: %v\n", err)
+			if _, writeErr := fmt.Fprintf(stderr, "crlc fmt: %v\n", err); writeErr != nil {
+				return 2
+			}
 			return 2
 		}
 		formatted, err := crl.Format(string(raw))
 		if err != nil {
-			fmt.Fprintf(stderr, "crlc fmt: %s: %v\n", path, err)
+			if _, writeErr := fmt.Fprintf(stderr, "crlc fmt: %s: %v\n", path, err); writeErr != nil {
+				return 1
+			}
 			return 1
 		}
 		if formatted == string(raw) {
 			continue
 		}
 		if err := writeFileAtomic(path, []byte(formatted)); err != nil {
-			fmt.Fprintf(stderr, "crlc fmt: %v\n", err)
+			if _, writeErr := fmt.Fprintf(stderr, "crlc fmt: %v\n", err); writeErr != nil {
+				return 2
+			}
 			return 2
 		}
-		fmt.Fprintln(stdout, path)
+		if _, err := fmt.Fprintln(stdout, path); err != nil {
+			return 1
+		}
 	}
 	return 0
 }
@@ -375,7 +429,7 @@ func runFmt(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // writeFileAtomic writes data by creating a temp file in the same directory
 // and renaming it over path, so an interrupted or failed write can never
 // truncate the original source. The file's existing mode is preserved.
-func writeFileAtomic(path string, data []byte) error {
+func writeFileAtomic(path string, data []byte) (err error) {
 	// Follow a symlink to its target before writing. os.Rename replaces the
 	// symlink itself rather than the file it points at, so without this a
 	// `crlc fmt -w link.crl` would turn the link into a regular file and
@@ -392,18 +446,29 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once the rename succeeds
+	closed := false
+	defer func() {
+		var closeErr error
+		if !closed {
+			closeErr = tmp.Close()
+		}
+		removeErr := os.Remove(tmpName)
+		if errors.Is(removeErr, fs.ErrNotExist) {
+			removeErr = nil
+		}
+		err = errors.Join(err, closeErr, removeErr)
+	}()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
 		return err
 	}
 	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
+		closed = true
 		return err
 	}
+	closed = true
 	return os.Rename(tmpName, path)
 }
 
@@ -420,28 +485,38 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *format != "text" && *format != "json" {
-		fmt.Fprintf(stderr, "crlc eval: unsupported format %q\n", *format)
+		if _, err := fmt.Fprintf(stderr, "crlc eval: unsupported format %q\n", *format); err != nil {
+			return 2
+		}
 		return 2
 	}
 	if *factsPath == "" {
-		fmt.Fprintln(stderr, "crlc eval: -facts is required")
+		if _, err := fmt.Fprintln(stderr, "crlc eval: -facts is required"); err != nil {
+			return 2
+		}
 		return 2
 	}
 	factsRaw, err := os.ReadFile(*factsPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "crlc eval: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc eval: %v\n", err); writeErr != nil {
+			return 2
+		}
 		return 2
 	}
 	var facts crl.Facts
 	if err := json.Unmarshal(factsRaw, &facts); err != nil {
-		fmt.Fprintf(stderr, "crlc eval: parse facts: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc eval: parse facts: %v\n", err); writeErr != nil {
+			return 2
+		}
 		return 2
 	}
 	now := time.Time{}
 	if *at != "" {
 		parsed, err := time.Parse(time.RFC3339, *at)
 		if err != nil {
-			fmt.Fprintf(stderr, "crlc eval: parse -at: %v\n", err)
+			if _, writeErr := fmt.Fprintf(stderr, "crlc eval: parse -at: %v\n", err); writeErr != nil {
+				return 2
+			}
 			return 2
 		}
 		now = parsed
@@ -452,7 +527,9 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	compiled, err := crl.Compile(source)
 	if err != nil {
-		fmt.Fprintf(stderr, "crlc eval: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc eval: %v\n", err); writeErr != nil {
+			return 1
+		}
 		return 1
 	}
 	evaluation := compiled.EvaluateAt(facts, now)
@@ -462,9 +539,13 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
 		encoder.SetIndent("", "  ")
-		_ = encoder.Encode(evaluation)
+		if err := encoder.Encode(evaluation); err != nil {
+			return 1
+		}
 	default:
-		fmt.Fprintln(stdout, evaluation.Result)
+		if _, err := fmt.Fprintln(stdout, evaluation.Result); err != nil {
+			return 1
+		}
 		for _, check := range evaluation.Checks {
 			if check.Passed {
 				continue
@@ -473,7 +554,9 @@ func runEval(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			if check.QuorumExpression != "" {
 				where = check.QuorumExpression
 			}
-			fmt.Fprintf(stdout, "  %s %s: %s\n", check.Kind, where, check.Reason)
+			if _, err := fmt.Fprintf(stdout, "  %s %s: %s\n", check.Kind, where, check.Reason); err != nil {
+				return 1
+			}
 		}
 	}
 	if *requireAuthorized && evaluation.Result != crl.Authorized {
@@ -496,13 +579,17 @@ func runGraph(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	result, err := crl.Graph(source)
 	if err != nil {
-		fmt.Fprintf(stderr, "crlc graph: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "crlc graph: %v\n", err); writeErr != nil {
+			return 1
+		}
 		return 1
 	}
 	encoder := json.NewEncoder(stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(result)
+	if err := encoder.Encode(result); err != nil {
+		return 1
+	}
 	return 0
 }
 
@@ -513,7 +600,9 @@ func readSource(paths []string, stdin io.Reader, stderr io.Writer, command strin
 	case 0:
 		raw, err := io.ReadAll(stdin)
 		if err != nil {
-			fmt.Fprintf(stderr, "%s: read stdin: %v\n", command, err)
+			if _, writeErr := fmt.Fprintf(stderr, "%s: read stdin: %v\n", command, err); writeErr != nil {
+				return "", 2
+			}
 			return "", 2
 		}
 		return string(raw), 0
@@ -522,19 +611,25 @@ func readSource(paths []string, stdin io.Reader, stderr io.Writer, command strin
 		if path == "-" {
 			raw, err := io.ReadAll(stdin)
 			if err != nil {
-				fmt.Fprintf(stderr, "%s: read stdin: %v\n", command, err)
+				if _, writeErr := fmt.Fprintf(stderr, "%s: read stdin: %v\n", command, err); writeErr != nil {
+					return "", 2
+				}
 				return "", 2
 			}
 			return string(raw), 0
 		}
 		raw, err := os.ReadFile(path)
 		if err != nil {
-			fmt.Fprintf(stderr, "%s: %v\n", command, err)
+			if _, writeErr := fmt.Fprintf(stderr, "%s: %v\n", command, err); writeErr != nil {
+				return "", 2
+			}
 			return "", 2
 		}
 		return string(raw), 0
 	default:
-		fmt.Fprintf(stderr, "%s: expected one path (or stdin)\n", command)
+		if _, err := fmt.Fprintf(stderr, "%s: expected one path (or stdin)\n", command); err != nil {
+			return "", 2
+		}
 		return "", 2
 	}
 }
