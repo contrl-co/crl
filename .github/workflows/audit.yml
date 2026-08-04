@@ -1,0 +1,44 @@
+# Weekly vulnerability sweep of the default branch, vendored from
+# contrl-co/workflows (audit.yml plus examples/consumer-audit.yml) and
+# specialized for this repo. PR-time scans in ci.yml cover what a PR
+# touches; this catches CVEs disclosed while the repo is quiet. A failure
+# shows as a red run on the Actions tab, it blocks nothing.
+#
+name: audit
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # GOTOOLCHAIN=auto lets go fetch the toolchain the analyzer requires;
+      # the repo-pinned Go only bootstraps the download.
+      - env:
+          GOTOOLCHAIN: auto
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: >
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.1
+          fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
+
+  grype:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker run --rm -v "$PWD:/src" anchore/grype:v0.86.1 dir:/src --fail-on high
