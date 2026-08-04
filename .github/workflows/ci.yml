@@ -1,0 +1,241 @@
+# CI for the CRL toolchain: lint -> test -> build -> package
+#
+# Tool versions are pinned; bumping one is a reviewed change
+#
+# Never add paths filters to the triggers. A required check that never runs
+# blocks the PR forever on "Expected".
+name: ci
+
+on:
+  pull_request:
+    # edited fires on base-branch retarget: the head SHA keeps its green
+    # checks while the effective diff changed, so the gate must re-run.
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+  merge_group:
+  # Only the default branch. Feature branches get CI through their PR.
+  push:
+    branches: [develop]
+
+concurrency:
+  # merge_group has no PR number; github.ref is unique per queue entry, so
+  # queued runs never cancel each other. develop pushes must queue, not
+  # cancel: a cancelled push run would still execute the always() gate,
+  # stamp a red "ci / gate" on an already-merged commit, and lose its
+  # snapshot artifact.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: gofmt
+        run: 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: files need formatting"; exit 1; }'
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # Pinned because the action pins only the installer, not the
+          # tool; without this input the lint version drifts under the
+          # SHA-pinned action.
+          version: v2.12.2
+
+      - name: Test
+        # Includes the golden-corpus determinism gate, the canonical
+        # round-trip test, and docs-lint (every fenced crl block in every
+        # markdown file compiles, or provably fails for counterexamples).
+        run: go test ./... -race -count=1
+
+      - name: Vulnerability scan
+        # govulncheck flags only vulnerabilities reachable from the call
+        # graph, so a hit is actionable. The database is fetched live from
+        # vuln.go.dev on every run; @latest only keeps the analyzer current.
+        # GOTOOLCHAIN=auto because setup-go exports local, and the analyzer
+        # may require a newer toolchain than the repo pins.
+        env:
+          GOTOOLCHAIN: auto
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  # Fast-fail visibility for documentation examples; the full suite in the
+  # go job runs this test again as part of ./...
+  docs-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go test . -run TestDocsCRLBlocks -count=1 -v
+
+  examples-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go run ./cmd/crlc lint examples/
+      - run: go run ./cmd/crlc eval -facts examples/facts/permit_quorum_2of3.authorized.json -at 2026-06-02T00:00:00Z -require-authorized examples/permit_quorum_2of3.crl
+
+  # A compiler change that moves hashes of unchanged source must carry a
+  # "hashes moved" CHANGELOG entry (spec/editions.md).
+  hash-disclosure:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The script builds the base revision in a worktree and diffs
+          # BASE..HEAD; both need the full history.
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # github.event.pull_request.base.sha is a payload snapshot that goes
+      # stale when the base branch advances, while the checkout's merge
+      # commit is recomputed against the current tip; mixing them lets
+      # BASE..HEAD span other PRs' merged commits, which both gate scripts
+      # assume cannot happen. The merge commit's first parent is exactly
+      # the base tip the merge was computed against.
+      - run: sh scripts/ci/check-hash-disclosure.sh "$(git rev-parse HEAD^1)"
+
+  # A test file added by a PR must fail against the base implementation,
+  # or it pins nothing.
+  new-tests-pin:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # HEAD^1, not the payload's base.sha, for the same staleness reason
+      # as hash-disclosure above.
+      - run: sh scripts/ci/check-new-tests-pin.sh "$(git rev-parse HEAD^1)"
+
+  # Cross-platform determinism: the golden test must produce identical
+  # hashes on every OS/arch. Hard gate here; the GitLab pipeline ran arm64
+  # as allow_failure pending runner quota, but GitHub-hosted arm64 runners
+  # are free for public repositories.
+  golden-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go test . -run 'TestExamplesMatchGoldenHashes|TestExamplesCanonicalRoundTrip' -count=1
+
+  # goreleaser build only: nothing publishes, so the GitLab-specific
+  # release/brews config in .goreleaser.yaml stays inert until the release
+  # workflow port lands.
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go run github.com/goreleaser/goreleaser/v2@v2.6.1 build --snapshot --clean
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snapshot-dist
+          path: dist/
+          retention-days: 7
+
+  vscode-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+          # No package-lock.json in editors/vscode; without this a
+          # packageManager field appearing later would re-enable caching
+          # and fail the lockfile-less setup.
+          package-manager-cache: false
+      # The check script needs no install: the extension has zero runtime
+      # and dev dependencies, and vsce runs through npx.
+      - run: npm run check
+      - run: npx --yes @vscode/vsce@3.2.1 package --out crl-language-support.vsix
+      - uses: actions/upload-artifact@v7
+        with:
+          name: crl-language-support-vsix
+          path: editors/vscode/crl-language-support.vsix
+          retention-days: 7
+
+  # Blocking scans on PRs and queue entries, matching the GitLab MR
+  # pipeline. The weekly non-blocking sweep lives in audit.yml. Tool
+  # versions match the images .gitlab-ci.yml pinned; docker run keeps the
+  # pin exact without trusting a third-party action.
+  trivy:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: >
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.1
+          fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
+
+  grype:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker run --rm -v "$PWD:/src" anchore/grype:v0.86.1 dir:/src --fail-on high
+
+  # The explicit name makes the check run report as "ci / gate", the exact
+  # string the ruleset requires; a plain job would report as bare "gate".
+  # Skipped jobs count as a pass; only failure and cancellation fail the
+  # gate.
+  gate:
+    name: ci / gate
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - go
+      - docs-lint
+      - examples-lint
+      - hash-disclosure
+      - new-tests-pin
+      - golden-arm64
+      - snapshot
+      - vscode-extension
+      - trivy
+      - grype
+    steps:
+      - name: Fail if any dependency failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
