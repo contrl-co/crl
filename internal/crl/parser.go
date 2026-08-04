@@ -117,6 +117,7 @@ func renderCountCall(tokens []Token, start int) (string, int, bool) {
 	}
 	depth := 0
 	end := -1
+	callEnd := false
 	for i := start + 1; i < len(tokens); i++ {
 		switch tokens[i].Kind {
 		case TokenLParen:
@@ -125,8 +126,11 @@ func renderCountCall(tokens []Token, start int) (string, int, bool) {
 			depth--
 			if depth == 0 {
 				end = i
-				break
+				callEnd = true
 			}
+		}
+		if callEnd {
+			break
 		}
 	}
 	if end == -1 {
