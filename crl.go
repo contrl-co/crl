@@ -39,6 +39,10 @@ var ErrUnknownEdition = errors.New("crl: unknown edition")
 // come from the compiler, and therefore addresses no program.
 var ErrNoProgram = errors.New("crl: compiled bundle carries no program")
 
+// ErrNonIndependentQuorum reports a quorum that counts two collectors backed
+// by the same evidence source. Such a rule is rejected during compilation.
+var ErrNonIndependentQuorum = lang.ErrNonIndependentQuorum
+
 // Result is one of the five evaluation outcomes. Every consumer of CRL
 // evaluations must handle all five spellings.
 type Result string

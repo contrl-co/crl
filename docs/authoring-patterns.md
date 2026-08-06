@@ -120,8 +120,8 @@ sugar.
 The count is only honest when the collectors are genuinely distinct
 sources. Two collectors that read the **same** `source` do not
 corroborate independently — counting both overstates how many separate
-sources agree. The linter flags this as **CRL211**; give each
-independent input its own source, or count only over distinct sources.
+sources agree. Compilation rejects this as **CRL121**. Give each independent
+input its own source, or count only over distinct sources.
 
 ## Multi-party acceptance (counterparty attestation)
 
