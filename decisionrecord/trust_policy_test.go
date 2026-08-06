@@ -39,6 +39,24 @@ func TestTrustPolicySemanticBoundaries(t *testing.T) {
 	}
 }
 
+func FuzzParseTrustPolicyNeverPanics(f *testing.F) {
+	valid, err := os.ReadFile("../spec/testdata/decision-trust-policy-v1/valid/policy.json")
+	if err != nil {
+		f.Fatal(err)
+	}
+	for _, seed := range [][]byte{
+		valid,
+		[]byte(`{}`),
+		[]byte(`{"schema_version":"crl-decision-trust-policy/v1","schema_version":"v2"}`),
+		{0xff},
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(_ *testing.T, body []byte) {
+		_, _ = ParseTrustPolicy(body)
+	})
+}
+
 func TestParseTrustPolicyRejectsInvalidWireJSON(t *testing.T) {
 	tests := map[string][]byte{
 		"invalid UTF-8":     {'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'},

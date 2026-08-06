@@ -298,6 +298,23 @@ func validateTrustPolicyUTF8(policy *TrustPolicy) error {
 	return nil
 }
 
+func (policy *TrustPolicy) unsigned() map[string]any {
+	return map[string]any{
+		"schema_version":         policy.SchemaVersion,
+		"policy_id":              policy.PolicyID,
+		"version":                policy.Version,
+		"created_at":             policy.CreatedAt,
+		"domain":                 policy.Domain,
+		"valid_from":             policy.ValidFrom,
+		"valid_until":            policy.ValidUntil,
+		"max_clock_skew_seconds": policy.MaxClockSkewSeconds,
+		"roles":                  policy.Roles,
+		"keys":                   policy.Keys,
+		"allowed_extensions":     policy.AllowedExtensions,
+		"required_extensions":    policy.RequiredExtensions,
+	}
+}
+
 func policyError(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrTrustPolicy, fmt.Sprintf(format, args...))
 }
