@@ -75,6 +75,10 @@ func VerifyTrust(record *Record, policy *TrustPolicy, expectedPolicyHash string,
 	if err := VerifyIntegrity(record); err != nil {
 		return TrustEvidence{}, err
 	}
+	return verifyTrust(record, policy, expectedPolicyHash, verifiedAt)
+}
+
+func verifyTrust(record *Record, policy *TrustPolicy, expectedPolicyHash string, verifiedAt time.Time) (TrustEvidence, error) {
 	if err := VerifyTrustPolicy(policy, expectedPolicyHash); err != nil {
 		return TrustEvidence{}, err
 	}

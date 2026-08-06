@@ -3,6 +3,6 @@
 // decision correctness.
 //
 // Trust verification does not prove decision correctness, and decision
-// verification does not prove trust. Neither applies replay or application
-// context policy. A relying party must run every required layer before acting.
+// verification does not prove trust. VerifyForUse composes every layer with a
+// pinned context policy and an atomic replay store before a relying party acts.
 package decisionrecord

@@ -70,6 +70,10 @@ func VerifyDecision(record *Record) error {
 	if err := VerifyIntegrity(record); err != nil {
 		return err
 	}
+	return verifyDecision(record)
+}
+
+func verifyDecision(record *Record) error {
 	compiled, err := crl.CompileEdition(record.Rule.Source, record.Rule.Edition)
 	if err != nil {
 		return decision("compile source: %v", err)

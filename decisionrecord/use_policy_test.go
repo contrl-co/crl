@@ -65,6 +65,15 @@ func TestVerifyUsePolicyRequiresExactPin(t *testing.T) {
 	}
 }
 
+func FuzzParseUsePolicyNeverPanics(f *testing.F) {
+	f.Add([]byte(`{}`))
+	f.Add([]byte(`{"schema_version":"crl-decision-use-policy/v1"}`))
+	f.Add([]byte{'"', 0xff, '"'})
+	f.Fuzz(func(t *testing.T, body []byte) {
+		_, _ = ParseUsePolicy(body)
+	})
+}
+
 func parseUsePolicyFixture(t *testing.T) *UsePolicy {
 	t.Helper()
 	policy, err := ParseUsePolicy(readUsePolicyFixture(t))

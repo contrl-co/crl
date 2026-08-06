@@ -81,12 +81,15 @@ extracted and compiled in CI. If it's written down here, it compiles.
 
 This is the public home of the CRL **language**: specification,
 compiler front-end, linter, formatter, local evaluator, graph
-projection, examples, and editor tooling. All of it is free software,
-in the open, under the AGPL — see [License](#license).
+projection, portable decision-record schemas and verifier, examples, and editor
+tooling. All of it is free software, in the open, under the AGPL — see
+[License](#license).
 
 The CONTRL **platform** — the operated services that bind rules to
 real evidence streams and record decisions in a verifiable audit
-trail — is a separate, closed-source product.
+trail — is a separate, closed-source product. It owns evidence capture, private
+keys, approved policy distribution, and the durable replay store; this package
+defines and verifies their public contracts.
 Running `crlc eval` tells you what a rule decides about facts you
 supply; it does not mint a decision record anyone else must trust.
 That separation is deliberate: the language spreads the standard, and

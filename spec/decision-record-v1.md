@@ -114,8 +114,9 @@ A consumer must stop at the first failed layer:
    roles, key status, signature time, revocation, and Ed25519 signatures.
 6. Recompile the source and independently re-evaluate the exact facts at
    `evaluation.at`; require the canonical bundle, trace, and outcome to match.
-7. Apply replay and context policy using the record ID, domain, subject,
-   correlation ID, and evaluation time.
+7. Resolve and pin the current [decision use policy](decision-use-policy-v1.md),
+   require exact caller domain/subject/correlation context and fresh record
+   times, then atomically consume both replay identities.
 
 These layers must be reported separately:
 

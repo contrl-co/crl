@@ -50,6 +50,10 @@ expired under an older retention rule. The package memory store is for tests
 and single-process tools only; production consumers need a durable store with a
 unique transaction or equivalent atomic primitive.
 
+The composed `VerifyForUse` operation consumes replay state only for a correct,
+trusted, fresh `AUTHORIZED` record. Any other CRL outcome fails as
+not-authorized and leaves the request unconsumed.
+
 ## Policy hash
 
 ```text
