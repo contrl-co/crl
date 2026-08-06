@@ -21,6 +21,7 @@ every claim here is checked against it, and every example compiles
 | [canonical-form.md](canonical-form.md) | Canonical text, canonical JSON, and content addressing |
 | [editions.md](editions.md) | The edition contract and the status of v1 |
 | [decision-record-v1.md](decision-record-v1.md) | Portable decision records, provenance, hashes, and signature envelopes |
+| [decision-trust-policy-v1.md](decision-trust-policy-v1.md) | Versioned roles, public keys, thresholds, validity, and revocation |
 
 ## The contract in three sentences
 

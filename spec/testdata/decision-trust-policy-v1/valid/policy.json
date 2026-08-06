@@ -1,0 +1,48 @@
+{
+  "schema_version": "crl-decision-trust-policy/v1",
+  "policy_id": "01989f7e-7b80-7000-8000-000000000010",
+  "version": 1,
+  "created_at": "2025-12-15T00:00:00Z",
+  "domain": "contrl.co/example",
+  "valid_from": "2026-01-01T00:00:00Z",
+  "valid_until": "2027-01-01T00:00:00Z",
+  "max_clock_skew_seconds": 300,
+  "roles": [
+    {
+      "role": "issuer",
+      "threshold": 1,
+      "max_signature_delay_seconds": 300
+    },
+    {
+      "role": "reviewer",
+      "threshold": 1,
+      "max_signature_delay_seconds": 86400
+    }
+  ],
+  "keys": [
+    {
+      "algorithm": "ed25519",
+      "key_id": "issuer-2026-01",
+      "role": "issuer",
+      "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "not_before": "2026-01-01T00:00:00Z",
+      "not_after": "2027-01-01T00:00:00Z"
+    },
+    {
+      "algorithm": "ed25519",
+      "key_id": "reviewer-2026-01",
+      "role": "reviewer",
+      "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+      "not_before": "2026-01-01T00:00:00Z",
+      "not_after": "2027-01-01T00:00:00Z"
+    }
+  ],
+  "allowed_extensions": [
+    "contrl.co/approval",
+    "contrl.co/workflow"
+  ],
+  "required_extensions": [
+    "contrl.co/workflow"
+  ],
+  "policy_hash": "8e5b7bf2c59c86783fbf2144be668be4c09afd72aca38a46620568bb7072f2d6"
+}

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "unsupported schema version",
+    "path": ["schema_version"],
+    "value": "crl-decision-trust-policy/v2"
+  },
+  {
+    "name": "zero policy version",
+    "path": ["version"],
+    "value": 0
+  },
+  {
+    "name": "noncanonical timestamp",
+    "path": ["valid_from"],
+    "value": "2026-01-01T00:00:00+00:00"
+  },
+  {
+    "name": "invalid domain",
+    "path": ["domain"],
+    "value": "EXAMPLE"
+  },
+  {
+    "name": "excessive clock skew",
+    "path": ["max_clock_skew_seconds"],
+    "value": 3601
+  },
+  {
+    "name": "zero role threshold",
+    "path": ["roles", "0", "threshold"],
+    "value": 0
+  },
+  {
+    "name": "excessive signature delay",
+    "path": ["roles", "0", "max_signature_delay_seconds"],
+    "value": 31536001
+  },
+  {
+    "name": "unsupported key algorithm",
+    "path": ["keys", "0", "algorithm"],
+    "value": "rsa"
+  },
+  {
+    "name": "noncanonical public key padding bits",
+    "path": ["keys", "0", "public_key"],
+    "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB="
+  },
+  {
+    "name": "invalid key identifier",
+    "path": ["keys", "0", "key_id"],
+    "value": " issuer"
+  },
+  {
+    "name": "invalid role",
+    "path": ["roles", "0", "role"],
+    "value": "Issuer"
+  },
+  {
+    "name": "duplicate allowed extension",
+    "path": ["allowed_extensions"],
+    "value": ["contrl.co/workflow", "contrl.co/workflow"]
+  },
+  {
+    "name": "malformed policy hash",
+    "path": ["policy_hash"],
+    "value": "sha256:00"
+  },
+  {
+    "name": "unknown top-level field",
+    "path": ["trusted"],
+    "value": true
+  }
+]
