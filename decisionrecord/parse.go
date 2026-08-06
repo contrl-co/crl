@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -49,6 +50,9 @@ func Parse(body []byte) (*Record, error) {
 	}
 	if err := validateProvenance(record); err != nil {
 		return nil, structural("provenance: %v", err)
+	}
+	if err := validateRecordTimes(record); err != nil {
+		return nil, structural("time: %v", err)
 	}
 	if err := validateSignatures(record.Signatures); err != nil {
 		return nil, structural("signatures: %v", err)
@@ -205,6 +209,30 @@ func validateProvenance(record *Record) error {
 	return nil
 }
 
+func validateRecordTimes(record *Record) error {
+	createdAt, err := time.Parse(time.RFC3339Nano, record.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("created_at: %w", err)
+	}
+	evaluatedAt, err := time.Parse(time.RFC3339Nano, record.Evaluation.At)
+	if err != nil {
+		return fmt.Errorf("evaluation.at: %w", err)
+	}
+	if createdAt.Before(evaluatedAt) {
+		return errors.New("created_at predates evaluation.at")
+	}
+	for _, item := range record.Evaluation.Provenance {
+		observedAt, err := time.Parse(time.RFC3339Nano, item.ObservedAt)
+		if err != nil {
+			return fmt.Errorf("provenance fact %q observed_at: %w", item.Fact, err)
+		}
+		if observedAt.After(evaluatedAt) {
+			return fmt.Errorf("provenance fact %q was observed after evaluation.at", item.Fact)
+		}
+	}
+	return nil
+}
+
 func validateRecord(record *Record) error {
 	if record == nil {
 		return structural("record is nil")
@@ -229,6 +257,9 @@ func validateRecord(record *Record) error {
 	}
 	if err := validateProvenance(record); err != nil {
 		return structural("provenance: %v", err)
+	}
+	if err := validateRecordTimes(record); err != nil {
+		return structural("time: %v", err)
 	}
 	if err := validateSignatures(record.Signatures); err != nil {
 		return structural("signatures: %v", err)

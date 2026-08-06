@@ -31,6 +31,10 @@ provenance entry naming its supplier, source locator, source-document SHA-256,
 and observation time. `observed_at.<fact>` uses the provenance entry for
 `<fact>`. Duplicate provenance entries for one fact are invalid.
 
+Evidence cannot be observed after the decision that used it, and a record
+cannot be created before its evaluation. Consumers must reject
+`provenance.observed_at > evaluation.at` and `evaluation.at > created_at`.
+
 ## Canonical bytes and hashes
 
 `CanonicalJSON` below means the deterministic encoder in

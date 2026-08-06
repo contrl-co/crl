@@ -99,6 +99,32 @@ func TestParseEnforcesProvenanceInvariants(t *testing.T) {
 	}
 }
 
+func TestParseRejectsImpossibleRecordTimeOrder(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{name: "record predates evaluation", mutate: func(document map[string]any) {
+			document["created_at"] = "2026-08-06T14:59:59Z"
+		}},
+		{name: "evidence observed after evaluation", mutate: func(document map[string]any) {
+			evaluation := document["evaluation"].(map[string]any)
+			provenance := evaluation["provenance"].([]any)[0].(map[string]any)
+			provenance["observed_at"] = "2026-08-06T15:00:01Z"
+			fact := provenance["fact"].(string)
+			evaluation["facts"].(map[string]any)["observed_at."+fact] = provenance["observed_at"]
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			document := decodeParseDocument(t, readPublishedFixture(t))
+			test.mutate(document)
+			if _, err := Parse(marshalParseDocument(t, document)); !errors.Is(err, ErrStructural) {
+				t.Fatalf("Parse error = %v, want ErrStructural", err)
+			}
+		})
+	}
+}
+
 func TestParseEnforcesSignatureIdentityAndOrder(t *testing.T) {
 	signature := func(role, keyID string) map[string]any {
 		return map[string]any{
