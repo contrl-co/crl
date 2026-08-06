@@ -200,6 +200,32 @@ jobs:
           anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db
           dir:/src --fail-on high
 
+  # Allocation ceilings run in the required Go suite. Wall-clock and peak
+  # memory measurements stay informational because hosted-runner contention
+  # is not stable enough for a merge gate. Capture them on each develop head
+  # so regressions can be compared on the same runner class.
+  performance-report:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Capture performance report
+        env:
+          BENCH_COUNT: "10"
+        run: ./scripts/performance-baseline.sh > performance-baseline.txt 2>&1
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crl-performance-${{ github.sha }}
+          path: performance-baseline.txt
+          if-no-files-found: error
+          retention-days: 30
+
   # The explicit name makes the check run report as "ci / gate", the exact
   # string the ruleset requires; a plain job would report as bare "gate".
   # Event-specific jobs may be skipped only on events where their job-level
@@ -219,6 +245,7 @@ jobs:
       - vscode-extension
       - trivy
       - grype
+      - performance-report
     steps:
       - name: Require every dependency
         env:
@@ -232,6 +259,7 @@ jobs:
           VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
           TRIVY_RESULT: ${{ needs.trivy.result }}
           GRYPE_RESULT: ${{ needs.grype.result }}
+          PERFORMANCE_REPORT_RESULT: ${{ needs.performance-report.result }}
         run: |
           set -eu
 
@@ -262,7 +290,9 @@ jobs:
           if [ "$EVENT_NAME" = push ]; then
             require_result trivy "$TRIVY_RESULT" skipped
             require_result grype "$GRYPE_RESULT" skipped
+            require_result performance-report "$PERFORMANCE_REPORT_RESULT" success
           else
             require_result trivy "$TRIVY_RESULT" success
             require_result grype "$GRYPE_RESULT" success
+            require_result performance-report "$PERFORMANCE_REPORT_RESULT" skipped
           fi
