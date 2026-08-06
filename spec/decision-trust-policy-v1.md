@@ -53,8 +53,10 @@ If `revoked_at` is present, the key is untrusted for every signature. The time
 is audit metadata, not a cutoff based on `signed_at`: that timestamp is asserted
 by the signer, so a compromised key could backdate a new signature. Decision
 trust-policy v1 has no independently trusted timestamp proof and therefore
-cannot preserve pre-revocation trust safely. Retaining an expired, unrevoked
-public key permits historical verification; it does not reactivate the key.
+cannot preserve pre-revocation trust safely. `revoked_at` may fall outside the
+key validity window when compromise is discovered after expiry. Retaining an
+expired, unrevoked public key permits historical verification; it does not
+reactivate the key.
 Expired or superseded policies remain audit artifacts and are not valid current
 trust roots.
 

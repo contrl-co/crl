@@ -235,14 +235,8 @@ func validateKeyTimes(key TrustedKey) error {
 	if key.RevokedAt == "" {
 		return nil
 	}
-	revokedAt, err := policyTime("key "+key.KeyID+" revoked_at", key.RevokedAt)
-	if err != nil {
-		return err
-	}
-	if revokedAt.Before(notBefore) || !revokedAt.Before(notAfter) {
-		return policyError("key %q revoked_at is outside its validity interval", key.KeyID)
-	}
-	return nil
+	_, err = policyTime("key "+key.KeyID+" revoked_at", key.RevokedAt)
+	return err
 }
 
 func validateSortedStrings(name string, values []string) error {

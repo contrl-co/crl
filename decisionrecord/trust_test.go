@@ -190,6 +190,19 @@ func TestVerifyTrustRejectsSignatureBeforeLaterRevocation(t *testing.T) {
 	}
 }
 
+func TestVerifyTrustRejectsKeyRevokedAfterExpiry(t *testing.T) {
+	record, policy, _ := trustedTestRecord(t)
+	policy.CreatedAt = "2028-01-01T00:00:00Z"
+	policy.ValidFrom = "2028-01-02T00:00:00Z"
+	policy.ValidUntil = "2029-01-01T00:00:00Z"
+	policy.Keys[0].RevokedAt = "2028-01-01T00:00:00Z"
+	rehashTestPolicy(t, policy)
+	verifiedAt := time.Date(2028, 1, 2, 0, 0, 0, 0, time.UTC)
+	if _, err := VerifyTrust(record, policy, policy.PolicyHash, verifiedAt); !errors.Is(err, ErrTrust) {
+		t.Fatalf("VerifyTrust error = %v, want ErrTrust", err)
+	}
+}
+
 func TestVerifyTrustAcceptsHistoricalSignatureFromExpiredUnrevokedKey(t *testing.T) {
 	record, policy, _ := trustedTestRecord(t)
 	policy.ValidUntil = "2029-01-01T00:00:00Z"

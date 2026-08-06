@@ -28,6 +28,12 @@ func TestTrustPolicySemanticBoundaries(t *testing.T) {
 		{name: "revoked at key activation", mutate: func(policy *TrustPolicy) {
 			policy.Keys[0].RevokedAt = policy.Keys[0].NotBefore
 		}},
+		{name: "revoked before key activation", mutate: func(policy *TrustPolicy) {
+			policy.Keys[0].RevokedAt = "2025-12-31T23:59:59Z"
+		}},
+		{name: "revoked at key expiry", mutate: func(policy *TrustPolicy) {
+			policy.Keys[0].RevokedAt = policy.Keys[0].NotAfter
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			policy := parseTrustPolicyFixture(t)
@@ -36,6 +42,17 @@ func TestTrustPolicySemanticBoundaries(t *testing.T) {
 				t.Fatalf("validateTrustPolicy: %v", err)
 			}
 		})
+	}
+}
+
+func TestTrustPolicyAllowsRevocationDiscoveredAfterKeyExpiry(t *testing.T) {
+	policy := parseTrustPolicyFixture(t)
+	policy.CreatedAt = "2028-01-01T00:00:00Z"
+	policy.ValidFrom = "2028-01-02T00:00:00Z"
+	policy.ValidUntil = "2029-01-01T00:00:00Z"
+	policy.Keys[0].RevokedAt = "2028-01-01T00:00:00Z"
+	if err := validateTrustPolicy(policy); err != nil {
+		t.Fatalf("post-expiry compromise revocation: %v", err)
 	}
 }
 
@@ -93,11 +110,8 @@ func TestTrustPolicySemanticValidation(t *testing.T) {
 		{name: "created after activation", mutate: func(policy *TrustPolicy) { policy.CreatedAt = "2026-01-02T00:00:00Z" }},
 		{name: "empty policy interval", mutate: func(policy *TrustPolicy) { policy.ValidUntil = policy.ValidFrom }},
 		{name: "empty key interval", mutate: func(policy *TrustPolicy) { policy.Keys[0].NotAfter = policy.Keys[0].NotBefore }},
-		{name: "revocation before key validity", mutate: func(policy *TrustPolicy) {
-			policy.Keys[0].RevokedAt = "2025-12-31T23:59:59Z"
-		}},
-		{name: "revocation at key expiry", mutate: func(policy *TrustPolicy) {
-			policy.Keys[0].RevokedAt = policy.Keys[0].NotAfter
+		{name: "invalid revocation time", mutate: func(policy *TrustPolicy) {
+			policy.Keys[0].RevokedAt = "not-a-time"
 		}},
 		{name: "allowed extensions out of order", mutate: func(policy *TrustPolicy) {
 			policy.AllowedExtensions[0], policy.AllowedExtensions[1] = policy.AllowedExtensions[1], policy.AllowedExtensions[0]
