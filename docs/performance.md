@@ -16,6 +16,8 @@ the Go version, OS/architecture, and runner class match. Keep raw reports as CI
 artifacts; do not commit machine-specific output.
 
 `TestAllocationBudgets` gates the same workloads using measured ceilings. The
-first hosted-run baseline will set latency and memory budgets. A budget change
-must include before/after samples, an explanation, and independent review.
-Never relax a budget to hide a correctness or security regression.
+develop workflow stores a 10-sample report for 30 days; wall-clock and peak
+memory remain informational until enough same-runner samples support stable
+budgets. A budget change must include before/after samples, an explanation,
+and independent review. Never relax a budget to hide a correctness or security
+regression.
