@@ -167,6 +167,12 @@ func validateProvenance(record *Record) error {
 	byFact := make(map[string]Provenance, len(record.Evaluation.Provenance))
 	previous := ""
 	for index, item := range record.Evaluation.Provenance {
+		if strings.HasPrefix(item.Fact, "observed_at.") {
+			return fmt.Errorf("metadata fact %q cannot have provenance", item.Fact)
+		}
+		if _, exists := record.Evaluation.Facts[item.Fact]; !exists {
+			return fmt.Errorf("provenance fact %q is absent from facts", item.Fact)
+		}
 		if _, exists := byFact[item.Fact]; exists {
 			return fmt.Errorf("duplicate fact %q", item.Fact)
 		}

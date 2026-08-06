@@ -74,6 +74,20 @@ func TestParseEnforcesProvenanceInvariants(t *testing.T) {
 			duplicate["source"] = "/evidence/duplicate.json"
 			evaluation["provenance"] = append(items, duplicate)
 		}},
+		{name: "provenance for absent fact", mutate: func(document map[string]any) {
+			evaluation := document["evaluation"].(map[string]any)
+			items := evaluation["provenance"].([]any)
+			extra := cloneParseDocument(t, items[0]).(map[string]any)
+			extra["fact"] = "unused"
+			evaluation["provenance"] = append(items, extra)
+		}},
+		{name: "provenance for observation metadata", mutate: func(document map[string]any) {
+			evaluation := document["evaluation"].(map[string]any)
+			items := evaluation["provenance"].([]any)
+			extra := cloneParseDocument(t, items[0]).(map[string]any)
+			extra["fact"] = "observed_at.approved"
+			evaluation["provenance"] = []any{items[0], extra, items[1]}
+		}},
 		{name: "unsorted provenance", mutate: func(document map[string]any) {
 			evaluation := document["evaluation"].(map[string]any)
 			items := evaluation["provenance"].([]any)
