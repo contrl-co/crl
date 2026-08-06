@@ -34,6 +34,10 @@ const EditionV1 = "v1"
 // toolchain does not implement.
 var ErrUnknownEdition = errors.New("crl: unknown edition")
 
+// ErrNonIndependentQuorum reports a quorum that counts two collectors backed
+// by the same evidence source. Such a rule is rejected during compilation.
+var ErrNonIndependentQuorum = lang.ErrNonIndependentQuorum
+
 // Result is one of the five evaluation outcomes. Every consumer of CRL
 // evaluations must handle all five spellings.
 type Result string

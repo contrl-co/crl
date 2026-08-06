@@ -47,6 +47,8 @@ var (
 	durationPattern   = regexp.MustCompile(`^([1-9][0-9]*)(ms|s|m|h|d|w|y)$`)
 )
 
+var ErrNonIndependentQuorum = fmt.Errorf("%w: non-independent quorum", ErrInvalidSyntax)
+
 type Collector struct {
 	Name          string   `json:"name"`
 	ProviderType  string   `json:"provider_type"`

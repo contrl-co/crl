@@ -53,6 +53,9 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Fixed
 
+- Same-source collectors can no longer count as independent quorum members.
+  The compiler rejects them with `CRL121`; hashes of accepted programs are
+  unchanged.
 - Newly rejected (each could previously produce a misleading or unsafe
   bundle): duplicate `target`, `package`, `bundle`, and cluster `rules`
   statements; a `count()` threshold above the subject count; a
