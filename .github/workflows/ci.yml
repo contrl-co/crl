@@ -32,13 +32,13 @@ env:
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -69,30 +69,31 @@ jobs:
       - name: Vulnerability scan
         # govulncheck flags only vulnerabilities reachable from the call
         # graph, so a hit is actionable. The database is fetched live from
-        # vuln.go.dev on every run; @latest only keeps the analyzer current.
+        # vuln.go.dev on every run; the analyzer version changes only in a
+        # reviewed commit.
         # GOTOOLCHAIN=auto because setup-go exports local, and the analyzer
         # may require a newer toolchain than the repo pins.
         env:
           GOTOOLCHAIN: auto
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
   # Fast-fail visibility for documentation examples; the full suite in the
   # go job runs this test again as part of ./...
   docs-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - run: go test . -run TestDocsCRLBlocks -count=1 -v
 
   examples-lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -103,14 +104,14 @@ jobs:
   # "hashes moved" CHANGELOG entry (spec/editions.md).
   hash-disclosure:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The script builds the base revision in a worktree and diffs
           # BASE..HEAD; both need the full history.
           fetch-depth: 0
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -126,12 +127,12 @@ jobs:
   # or it pins nothing.
   new-tests-pin:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -146,53 +147,53 @@ jobs:
   golden-arm64:
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
       - run: go test . -run 'TestExamplesMatchGoldenHashes|TestExamplesCanonicalRoundTrip' -count=1
 
   vscode-extension:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.12.0
-          # No package-lock.json in editors/vscode; without this a
-          # packageManager field appearing later would re-enable caching
-          # and fail the lockfile-less setup.
-          package-manager-cache: false
-      # The check script needs no install: the extension has zero runtime
-      # and dev dependencies, and vsce runs through npx. Packaging here
-      # only proves the extension packs; the installable vsix ships from
-      # the release workflow, binaries are release-only artifacts.
+          node-version: 22.21.1
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
       - run: npm run check
-      - run: npx --yes @vscode/vsce@3.2.1 package --out crl-language-support.vsix
+      - run: npm run package
+      - run: npm audit --audit-level=high
 
   # Blocking scans on PRs and queue entries, matching the GitLab MR
   # pipeline. The weekly non-blocking sweep lives in audit.yml. Tool
-  # versions match the images .gitlab-ci.yml pinned; docker run keeps the
-  # pin exact without trusting a third-party action.
+  # Immutable image digests avoid trusting a third-party action or a
+  # mutable registry tag.
   trivy:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: >
-          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:0.58.1
+          docker run --rm -v "$PWD:/src" -w /src
+          aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
           fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
 
   grype:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - run: docker run --rm -v "$PWD:/src" anchore/grype:v0.86.1 dir:/src --fail-on high
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: >-
+          docker run --rm -v "$PWD:/src"
+          anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db
+          dir:/src --fail-on high
 
   # The explicit name makes the check run report as "ci / gate", the exact
   # string the ruleset requires; a plain job would report as bare "gate".
@@ -201,7 +202,7 @@ jobs:
   gate:
     name: ci / gate
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - go
       - docs-lint
