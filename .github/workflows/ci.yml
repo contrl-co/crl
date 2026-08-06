@@ -197,8 +197,9 @@ jobs:
 
   # The explicit name makes the check run report as "ci / gate", the exact
   # string the ruleset requires; a plain job would report as bare "gate".
-  # Skipped jobs count as a pass; only failure and cancellation fail the
-  # gate.
+  # Event-specific jobs may be skipped only on events where their job-level
+  # conditions exclude them. Validate every result in the shell: a step-level
+  # expression previously let a failed dependency produce a green gate.
   gate:
     name: ci / gate
     if: always()
@@ -214,6 +215,49 @@ jobs:
       - trivy
       - grype
     steps:
-      - name: Fail if any dependency failed
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
+      - name: Require every dependency
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GO_RESULT: ${{ needs.go.result }}
+          DOCS_LINT_RESULT: ${{ needs.docs-lint.result }}
+          EXAMPLES_LINT_RESULT: ${{ needs.examples-lint.result }}
+          HASH_DISCLOSURE_RESULT: ${{ needs.hash-disclosure.result }}
+          NEW_TESTS_PIN_RESULT: ${{ needs.new-tests-pin.result }}
+          GOLDEN_ARM64_RESULT: ${{ needs.golden-arm64.result }}
+          VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
+          TRIVY_RESULT: ${{ needs.trivy.result }}
+          GRYPE_RESULT: ${{ needs.grype.result }}
+        run: |
+          set -eu
+
+          require_result() {
+            job="$1"
+            actual="$2"
+            expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "$job: expected $expected, got $actual"
+              return 1
+            fi
+          }
+
+          require_result go "$GO_RESULT" success
+          require_result docs-lint "$DOCS_LINT_RESULT" success
+          require_result examples-lint "$EXAMPLES_LINT_RESULT" success
+          require_result golden-arm64 "$GOLDEN_ARM64_RESULT" success
+          require_result vscode-extension "$VSCODE_EXTENSION_RESULT" success
+
+          if [ "$EVENT_NAME" = pull_request ]; then
+            require_result hash-disclosure "$HASH_DISCLOSURE_RESULT" success
+            require_result new-tests-pin "$NEW_TESTS_PIN_RESULT" success
+          else
+            require_result hash-disclosure "$HASH_DISCLOSURE_RESULT" skipped
+            require_result new-tests-pin "$NEW_TESTS_PIN_RESULT" skipped
+          fi
+
+          if [ "$EVENT_NAME" = push ]; then
+            require_result trivy "$TRIVY_RESULT" skipped
+            require_result grype "$GRYPE_RESULT" skipped
+          else
+            require_result trivy "$TRIVY_RESULT" success
+            require_result grype "$GRYPE_RESULT" success
+          fi
