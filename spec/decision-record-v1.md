@@ -89,7 +89,8 @@ The wire envelope contains `algorithm`, `key_id`, `role`, `signed_at`, and
 padded base64 encoding of the 64-byte Ed25519 signature. Duplicate `(role,
 key_id)` pairs are invalid. Key discovery, allowed roles, thresholds, validity
 windows, revocation, and compromise recovery belong to the separately
-versioned trust policy; absence of that policy fails trust verification closed.
+versioned [decision trust policy](decision-trust-policy-v1.md); absence of a
+caller-approved, currently active policy fails trust verification closed.
 
 ## Validation and verification order
 
@@ -104,8 +105,9 @@ A consumer must stop at the first failed layer:
    non-canonical array order, and any extension namespace the active policy
    does not recognize.
 4. Recompute and compare source, bundle, trace, and record hashes.
-5. Resolve the versioned trust policy, then validate roles, key status,
-   signature time, revocation, and Ed25519 signatures.
+5. Resolve exactly one caller-approved trust policy for the record domain that
+   is active at the verifier's trusted clock, then validate its pinned hash,
+   roles, key status, signature time, revocation, and Ed25519 signatures.
 6. Recompile the source and independently re-evaluate the exact facts at
    `evaluation.at`; require the canonical bundle, trace, and outcome to match.
 7. Apply replay and context policy using the record ID, domain, subject,
