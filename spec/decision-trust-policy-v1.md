@@ -14,10 +14,12 @@ configuration channel and pin its `policy_hash`. A policy supplied by the
 record or another untrusted input is not a trust root.
 
 Policy resolution must produce exactly one approved policy whose domain and
-validity interval match the record. No match or overlapping matches are an
-error. Deployments must use distinct domains and keys across production,
-staging, and test environments so a valid lower-environment signature cannot
-cross the trust boundary.
+validity interval match the verifier's trusted clock. No match or overlapping
+matches are an error. A record's self-asserted time must never select an older
+policy, because that would permit downgrade around a later key revocation.
+Deployments must use distinct domains and keys across production, staging, and
+test environments so a valid lower-environment signature cannot cross the
+trust boundary.
 
 The version and schema name are exact. A verifier must reject an unknown
 version; it must not downgrade or guess. The policy is closed to unknown
@@ -39,12 +41,12 @@ extension names lexicographically. Non-canonical order is invalid.
 Intervals are half-open:
 
 ```text
-policy: valid_from <= record.created_at < valid_until
+policy: valid_from <= verification_time < valid_until
 key:    not_before <= signature.signed_at < not_after
 ```
 
-`created_at` cannot be after `valid_from`. A signature cannot predate the
-record, exceed its role's maximum delay, or be more than
+`policy.created_at` cannot be after `valid_from`. A signature cannot predate
+the record, exceed its role's maximum delay, or be more than
 `max_clock_skew_seconds` ahead of the verifier's clock.
 
 If `revoked_at` is present, the key is untrusted for every signature. The time
@@ -53,6 +55,8 @@ by the signer, so a compromised key could backdate a new signature. Decision
 trust-policy v1 has no independently trusted timestamp proof and therefore
 cannot preserve pre-revocation trust safely. Retaining an expired, unrevoked
 public key permits historical verification; it does not reactivate the key.
+Expired or superseded policies remain audit artifacts and are not valid current
+trust roots.
 
 ## Extensions
 
