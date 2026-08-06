@@ -7,7 +7,8 @@
 # synchronize: checks attach to the head SHA, so without it every push
 # would leave the required check on "Expected" until a label toggle.
 # edited: fires on base-branch retarget, which changes what the path
-# rules should label.
+# rules should label. It also fires on title and body edits, which change
+# no path; the labeler skips those so they cannot cancel a run in flight.
 name: pr-gate
 
 on:
@@ -35,9 +36,13 @@ jobs:
     # requests, so the labeler's write would 403 on a public repo's
     # outside contributions (the canonical repo is private and never hits
     # this). Auto labels on fork PRs are applied by maintainers.
+    # A title or body edit changes no path, so the path rules would relabel
+    # to the same set. Skipping keeps those runs from cancelling an in-flight
+    # one; the labels job below still runs and re-asserts from the API.
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     permissions:
       contents: read
