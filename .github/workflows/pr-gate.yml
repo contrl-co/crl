@@ -7,8 +7,7 @@
 # synchronize: checks attach to the head SHA, so without it every push
 # would leave the required check on "Expected" until a label toggle.
 # edited: fires on base-branch retarget, which changes what the path
-# rules should label. It also fires on title and body edits, which change
-# no path; the labeler skips those so they cannot cancel a run in flight.
+# rules should label. Title and body edits skip the path labeler.
 name: pr-gate
 
 on:
@@ -21,9 +20,11 @@ on:
 concurrency:
   # Not in the canonical copy, which serializes nothing: with seven PR
   # trigger types including labeled/unlabeled, overlapping runs can finish
-  # out of order and let a stale label snapshot write the final state of
-  # the required check. Same group expression as ci.yml.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # out of order and let a stale label snapshot write the final state of the
+  # required check. Metadata-only edits get a unique suffix because they do
+  # not change labels and must not cancel a pending state-change run.
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'edited' && github.event.changes.base == null && github.run_id || 'state' }}
   cancel-in-progress: true
 
 permissions:
@@ -37,8 +38,7 @@ jobs:
     # outside contributions (the canonical repo is private and never hits
     # this). Auto labels on fork PRs are applied by maintainers.
     # A title or body edit changes no path, so the path rules would relabel
-    # to the same set. Skipping keeps those runs from cancelling an in-flight
-    # one; the labels job below still runs and re-asserts from the API.
+    # to the same set. The labels job below still re-asserts from the API.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
