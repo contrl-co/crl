@@ -10,6 +10,12 @@ on:
   pull_request:
     # edited fires on base-branch retarget: the head SHA keeps its green
     # checks while the effective diff changed, so the gate must re-run.
+    # It also fires on every title and body edit, which changes nothing any
+    # job here tests. Those runs still join the concurrency group below and
+    # cancel whatever is in flight, and two edits landing in the same second
+    # cancel each other, leaving required checks red on a commit that
+    # already passed. Every job therefore skips an edit that carries no base
+    # change, and the gate treats that all-skipped run as a pass.
     types: [opened, reopened, synchronize, edited, ready_for_review]
   merge_group:
   # Only the default branch. Feature branches get CI through their PR.
@@ -32,6 +38,9 @@ env:
 
 jobs:
   go:
+    # See the edited note on the trigger: a title or body edit reaches this
+    # workflow with no base change and nothing to test.
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -80,6 +89,7 @@ jobs:
   # Fast-fail visibility for documentation examples; the full suite in the
   # go job runs this test again as part of ./...
   docs-lint:
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,6 +100,7 @@ jobs:
       - run: go test . -run TestDocsCRLBlocks -count=1 -v
 
   examples-lint:
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,7 +114,9 @@ jobs:
   # A compiler change that moves hashes of unchanged source must carry a
   # "hashes moved" CHANGELOG entry (spec/editions.md).
   hash-disclosure:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -126,7 +139,9 @@ jobs:
   # A test file added by a PR must fail against the base implementation,
   # or it pins nothing.
   new-tests-pin:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,6 +160,7 @@ jobs:
   # as allow_failure pending runner quota, but GitHub-hosted arm64 runners
   # are free for public repositories.
   golden-arm64:
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,6 +171,7 @@ jobs:
       - run: go test . -run 'TestExamplesMatchGoldenHashes|TestExamplesCanonicalRoundTrip' -count=1
 
   vscode-extension:
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -176,7 +193,9 @@ jobs:
   # Immutable image digests avoid trusting a third-party action or a
   # mutable registry tag.
   trivy:
-    if: github.event_name != 'push'
+    if: >-
+      github.event_name != 'push' &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,7 +205,9 @@ jobs:
           fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
 
   grype:
-    if: github.event_name != 'push'
+    if: >-
+      github.event_name != 'push' &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -218,6 +239,10 @@ jobs:
       - name: Require every dependency
         env:
           EVENT_NAME: ${{ github.event_name }}
+          # True only for an edit that left the base branch alone, the case
+          # every job above skips. The gate itself still runs and reports, so
+          # the required check never sits on "Expected".
+          METADATA_ONLY_EDIT: ${{ github.event.action == 'edited' && github.event.changes.base == null }}
           GO_RESULT: ${{ needs.go.result }}
           DOCS_LINT_RESULT: ${{ needs.docs-lint.result }}
           EXAMPLES_LINT_RESULT: ${{ needs.examples-lint.result }}
@@ -229,6 +254,11 @@ jobs:
           GRYPE_RESULT: ${{ needs.grype.result }}
         run: |
           set -eu
+
+          if [ "$METADATA_ONLY_EDIT" = true ]; then
+            echo "Title or body edit with no base change; every job skipped."
+            exit 0
+          fi
 
           require_result() {
             job="$1"
