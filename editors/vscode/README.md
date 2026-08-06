@@ -43,5 +43,6 @@ If the linter cannot be run at all, the extension reports a single
 
 ```sh
 npm run check          # syntax-check extension.js and validate assets
-npx @vscode/vsce package   # build the .vsix
+npm ci
+npm run package -- --out crl-language-support.vsix
 ```

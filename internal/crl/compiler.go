@@ -1,6 +1,6 @@
 package crl
 
-import "gitlab.com/contrl-group/crl/internal/crypto"
+import "github.com/contrl-co/crl/internal/crypto"
 
 type LanguageCompilation struct {
 	SourceHash    string        `json:"source_hash"`

@@ -11,6 +11,9 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Security
 
+- The pinned Go toolchain is updated to 1.25.12 to fix the reachable
+  standard-library vulnerability GO-2026-4602, and `golang.org/x/text`
+  is updated to 0.39.0 to fix CVE-2026-56852 in Unicode normalization.
 - Compilation is now collision-safe against Unicode and invalid-UTF-8
   attacks: strings are folded to NFC in the compiler (the layer that
   also compares them, not the hasher), and invalid UTF-8 is rejected in
@@ -30,6 +33,12 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Changed
 
+- The canonical repository, Go module, release workflow, Homebrew tap,
+  security reporting, and contributor links now use the `contrl-co`
+  GitHub organization. The three releases copied from GitLab retain
+  their original keyless signing identity and are accepted only through
+  checksum-pinned compatibility rules; new releases use the GitHub
+  Actions workload identity.
 - **Bundle hashes moved for bundles containing `<`/`>` comparisons.**
   The canonical JSON encoder no longer HTML-escapes `<`, `>`, and `&`,
   so the operator `>=` is hashed as `>=` rather than `>=`. This is

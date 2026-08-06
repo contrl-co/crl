@@ -1,8 +1,8 @@
 #!/bin/sh
 # Merge gate: a compiler change that moves the hash of unchanged source
-# must be disclosed. Compiles the MR base's example corpus with the MR's
+# must be disclosed. Compiles the PR base's example corpus with the PR's
 # compiler and compares against the base golden file; any drift requires
-# a "hashes moved" entry in the MR's CHANGELOG diff (spec/editions.md).
+# a "hashes moved" entry in the PR's CHANGELOG diff (spec/editions.md).
 #
 # Usage: check-hash-disclosure.sh [base-sha]
 # Defaults to CI_MERGE_REQUEST_DIFF_BASE_SHA. The base sha must be

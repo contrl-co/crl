@@ -1,0 +1,184 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.25.12"
+  NODE_VERSION: "22.21.1"
+  GOFLAGS: -mod=readonly
+
+jobs:
+  validate-tag:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Require a v-prefixed semantic version on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Release tag is not a v-prefixed semantic version: $GITHUB_REF_NAME"
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tag_commit="$(git rev-parse "${GITHUB_REF}^{commit}")"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "::error::Release tag must point to a commit reachable from main."
+            exit 1
+          fi
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          if [ "$(jq -r '.object.type' <<<"$ref_json")" != tag ]; then
+            echo "::error::Release tag must be an annotated, cryptographically signed tag."
+            exit 1
+          fi
+          tag_oid="$(jq -r '.object.sha' <<<"$ref_json")"
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_oid" --jq '.verification.verified')" != true ]; then
+            echo "::error::Release tag signature is not verified by GitHub."
+            exit 1
+          fi
+          commit_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag_commit")"
+          if [ "$(jq -r '.commit.verification.verified' <<<"$commit_json")" != true ]; then
+            echo "::error::Release commit signature is not verified by GitHub."
+            exit 1
+          fi
+          if ! jq -r '.commit.message' <<<"$commit_json" | grep -q '^Signed-off-by: .\+ <[^>][^>]*>$'; then
+            echo "::error::Release commit is missing a DCO Signed-off-by trailer."
+            exit 1
+          fi
+
+  release:
+    name: Build, sign, and publish
+    needs: validate-tag
+    runs-on: ubuntu-24.04
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - name: Require cross-repository release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is required to open the version-pinned formula PR."
+            exit 1
+          fi
+      - name: Package VS Code extension
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          npm run check
+          npm audit --audit-level=high
+          npm run package -- --out "crl-language-support-$GITHUB_REF_NAME.vsix"
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: v1.50.0
+      - name: Add Syft to PATH
+        shell: bash
+        env:
+          SYFT_COMMAND: ${{ steps.syft.outputs.cmd }}
+        run: echo "$(dirname "$SYFT_COMMAND")" >> "$GITHUB_PATH"
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+      - name: Re-run the full toolchain gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"
+            exit 1
+          fi
+          go vet ./...
+          go test ./... -race -count=1
+          go run ./cmd/crlc lint examples/
+          GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - name: Scan release source with Trivy
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/work"
+          --workdir /work
+          aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
+          fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 .
+      - name: Scan release source with Grype
+        run: >-
+          docker run --rm --volume "$GITHUB_WORKSPACE:/work"
+          anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db
+          dir:/work --fail-on high --quiet
+      - name: Publish signed release artifacts and Homebrew formula
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.6.1
+          args: release --clean
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/*.cdx.json
+            editors/vscode/crl-language-support-*.vsix
+      - name: Require a reviewable Homebrew update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          branch="release/crlc-${version}"
+          pull_count="$(gh api --method GET repos/contrl-co/homebrew-tap/pulls \
+            -f state=open \
+            -f head="contrl-co:${branch}" \
+            -f base=main \
+            --jq 'length')"
+          if [ "$pull_count" -ne 1 ]; then
+            echo "::error::Expected one open Homebrew update PR from ${branch}; found ${pull_count}."
+            exit 1
+          fi
+      - name: Publish VS Code extension when configured
+        if: env.VSCE_PAT != ''
+        working-directory: editors/vscode
+        run: >-
+          npm run publish:marketplace --
+          --packagePath "crl-language-support-$GITHUB_REF_NAME.vsix"

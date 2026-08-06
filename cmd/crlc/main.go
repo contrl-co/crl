@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	crl "gitlab.com/contrl-group/crl"
-	"gitlab.com/contrl-group/crl/internal/crllint"
+	crl "github.com/contrl-co/crl"
+	"github.com/contrl-co/crl/internal/crllint"
 )
 
 // version is stamped at release time via -ldflags "-X main.version=...".
