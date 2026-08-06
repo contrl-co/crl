@@ -47,10 +47,12 @@ key:    not_before <= signature.signed_at < not_after
 record, exceed its role's maximum delay, or be more than
 `max_clock_skew_seconds` ahead of the verifier's clock.
 
-If `revoked_at` is present, a signature at or after that instant is untrusted.
-To invalidate all use of a compromised key, set `revoked_at` to `not_before`.
-Retaining an expired public key in a historical policy permits verification of
-signatures made while it was valid; it does not reactivate the key.
+If `revoked_at` is present, the key is untrusted for every signature. The time
+is audit metadata, not a cutoff based on `signed_at`: that timestamp is asserted
+by the signer, so a compromised key could backdate a new signature. Decision
+trust-policy v1 has no independently trusted timestamp proof and therefore
+cannot preserve pre-revocation trust safely. Retaining an expired, unrevoked
+public key permits historical verification; it does not reactivate the key.
 
 ## Extensions
 
@@ -69,9 +71,9 @@ policy_hash = SHA256("crl-decision-trust-policy/v1" || 0x00 || CanonicalJSON(uns
 
 The hash proves integrity, not authority. Authority comes from the caller's
 pinned configuration. Rotation adds a new key or policy version before the old
-window closes. Compromise recovery publishes a new pinned policy, records the
-earliest unsafe `revoked_at`, removes signing access to the old private key,
-and retains the old public policy for audit.
+window closes. Compromise recovery publishes a new pinned policy, records
+`revoked_at`, removes signing access to the old private key, re-verifies or
+re-signs affected records, and retains the old public policy for audit.
 
 ## Verification result
 
