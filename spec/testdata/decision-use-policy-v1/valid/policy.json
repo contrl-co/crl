@@ -1,0 +1,15 @@
+{
+  "schema_version": "crl-decision-use-policy/v1",
+  "policy_id": "7b0df509-0f9c-4f58-a5bb-c4ccb83d28f7",
+  "version": 1,
+  "created_at": "2026-08-06T00:00:00Z",
+  "domain": "example.com/permit",
+  "valid_from": "2026-08-06T00:00:00Z",
+  "valid_until": "2027-08-06T00:00:00Z",
+  "max_evaluation_age_seconds": 300,
+  "max_record_age_seconds": 120,
+  "max_record_delay_seconds": 60,
+  "max_clock_skew_seconds": 5,
+  "replay_scope": "record-and-correlation",
+  "policy_hash": "a74934d392bbfe8c77ce102543014f64371904ec9def3c3db56ee92445f6f47f"
+}

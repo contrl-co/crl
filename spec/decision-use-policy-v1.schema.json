@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contrl.co/schemas/crl/decision-use-policy-v1.schema.json",
+  "title": "CRL decision use policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "version",
+    "created_at",
+    "domain",
+    "valid_from",
+    "valid_until",
+    "max_evaluation_age_seconds",
+    "max_record_age_seconds",
+    "max_record_delay_seconds",
+    "max_clock_skew_seconds",
+    "replay_scope",
+    "policy_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "crl-decision-use-policy/v1"
+    },
+    "policy_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "domain": {
+      "$ref": "#/$defs/domain"
+    },
+    "valid_from": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "valid_until": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "max_evaluation_age_seconds": {
+      "$ref": "#/$defs/duration"
+    },
+    "max_record_age_seconds": {
+      "$ref": "#/$defs/duration"
+    },
+    "max_record_delay_seconds": {
+      "$ref": "#/$defs/duration"
+    },
+    "max_clock_skew_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600
+    },
+    "replay_scope": {
+      "const": "record-and-correlation"
+    },
+    "policy_hash": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{0,8}[1-9])?Z$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]{1,62}/[a-z][a-z0-9._-]{0,63}$"
+    },
+    "duration": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 31536000
+    }
+  }
+}

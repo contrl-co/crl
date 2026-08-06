@@ -1,0 +1,32 @@
+[
+  {
+    "name": "unknown schema version",
+    "path": ["schema_version"],
+    "value": "crl-decision-use-policy/v0"
+  },
+  {
+    "name": "noncanonical domain",
+    "path": ["domain"],
+    "value": "Example.com/permit"
+  },
+  {
+    "name": "negative evaluation age",
+    "path": ["max_evaluation_age_seconds"],
+    "value": -1
+  },
+  {
+    "name": "excessive record age",
+    "path": ["max_record_age_seconds"],
+    "value": 31536001
+  },
+  {
+    "name": "unsupported replay scope",
+    "path": ["replay_scope"],
+    "value": "record-only"
+  },
+  {
+    "name": "noncanonical policy hash",
+    "path": ["policy_hash"],
+    "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  }
+]
