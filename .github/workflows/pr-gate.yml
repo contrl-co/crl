@@ -1,0 +1,145 @@
+# Label gate. Vendored from contrl-co/workflows (pr-gate.yml plus
+# examples/consumer-pr-gate.yml)
+#
+# Requires .github/labeler.yml (canonical copy lives in contrl-co/workflows)
+# or the labeler job fails on every PR.
+#
+# synchronize: checks attach to the head SHA, so without it every push
+# would leave the required check on "Expected" until a label toggle.
+# edited: fires on base-branch retarget, which changes what the path
+# rules should label. Title and body edits skip the path labeler.
+name: pr-gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled, ready_for_review]
+  # Merge-queue entries get a trivial pass: labels were already asserted on
+  # the PR before it could enter the queue.
+  merge_group:
+
+concurrency:
+  # Not in the canonical copy, which serializes nothing: with seven PR
+  # trigger types including labeled/unlabeled, overlapping runs can finish
+  # out of order and let a stale label snapshot write the final state of the
+  # required check. Metadata-only edits get a unique suffix because they do
+  # not change labels and must not cancel a pending state-change run.
+  group: >-
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'edited' && github.event.changes.base == null && github.run_id || 'state' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  labeler:
+    # No PR to label in a merge-queue entry. Fork PRs skip instead of
+    # fail: their GITHUB_TOKEN is capped read-only no matter what this job
+    # requests, so the labeler's write would 403 on a public repo's
+    # outside contributions (the canonical repo is private and never hits
+    # this). Auto labels on fork PRs are applied by maintainers.
+    # A title or body edit changes no path, so the path rules would relabel
+    # to the same set. The labels job below still re-asserts from the API.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Read labeler.yml from the base branch. Without a local file the
+          # labeler falls back to an API fetch at the merge SHA, which would
+          # let a PR rewrite the rules that label that same PR.
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Assert labeler config
+        id: config
+        # A missing config at the base sha skips the sync instead of
+        # failing, unlike the canonical copy: the PR that introduces these
+        # files, and any PR based on an older develop, has no labeler.yml
+        # in its base tree yet. The tamper check below stays a hard fail;
+        # a PR cannot influence its base tree either way.
+        run: |
+          if [ ! -f .github/labeler.yml ]; then
+            echo "::notice::.github/labeler.yml is not in the base tree yet. Skipping auto labels."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Type and status labels are human-applied. A path rule here would
+          # let the labeler auto-apply or strip them.
+          if grep -qE '^"?(fix|feat|chore|Engineers at work|Test & Merge|DO NOT MERGE)"?:' .github/labeler.yml; then
+            echo "::error::Type or status labels have path rules in .github/labeler.yml. Remove them."
+            exit 1
+          fi
+          echo "present=true" >> "$GITHUB_OUTPUT"
+
+      - name: Sync auto labels from path rules
+        if: steps.config.outputs.present == 'true'
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          sync-labels: true
+
+  labels:
+    # The explicit name makes the check run report as "pr-gate / labels",
+    # the exact string the ruleset requires. In the canonical repo that
+    # string comes from the reusable-workflow call; a vendored top-level
+    # job would report as bare "labels" without it.
+    name: pr-gate / labels
+    # Sequenced after the labeler because GITHUB_TOKEN events do not trigger
+    # workflows: a label added by the labeler fires no labeled event.
+    needs: [labeler]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Pass merge-queue entries
+        if: github.event_name == 'merge_group'
+        run: echo "Merge queue entry. Labels were asserted before queueing."
+
+      - name: Assert type and status labels
+        if: github.event_name != 'merge_group'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const TYPE_LABELS = ['fix', 'feat', 'chore'];
+            const STATUS_LABELS = ['Engineers at work', 'Test & Merge', 'DO NOT MERGE'];
+            const HOLD_LABEL = 'DO NOT MERGE';
+
+            // Re-fetch labels from the API. The event payload is a snapshot
+            // taken before the labeler job ran.
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const labels = pr.labels.map((label) => label.name);
+
+            if (labels.includes(HOLD_LABEL)) {
+              core.setFailed('PR is explicitly held.');
+              return;
+            }
+
+            const problems = [];
+
+            const typeLabels = labels.filter((label) => TYPE_LABELS.includes(label));
+            if (typeLabels.length === 0) {
+              problems.push(`Exactly one type label required, none of [${TYPE_LABELS.join(', ')}] is applied.`);
+            } else if (typeLabels.length > 1) {
+              problems.push(`Exactly one type label required, found: ${typeLabels.join(', ')}.`);
+            }
+
+            const statusLabels = labels.filter((label) => STATUS_LABELS.includes(label));
+            if (statusLabels.length === 0) {
+              problems.push(`Exactly one status label required, none of [${STATUS_LABELS.join(', ')}] is applied.`);
+            } else if (statusLabels.length > 1) {
+              problems.push(`Exactly one status label required, found: ${statusLabels.join(', ')}.`);
+            }
+
+            if (problems.length > 0) {
+              core.setFailed(problems.join(' '));
+            }

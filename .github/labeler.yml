@@ -1,0 +1,27 @@
+# Path rules for auto labels only. Copy to .github/labeler.yml in each
+# consumer repository.
+#
+# Never add entries for type labels (fix, feat, chore) or status labels
+# (Engineers at work, Test & Merge, DO NOT MERGE). actions/labeler strips
+# any label it has a rule for, so an entry here would wipe the author's
+# manual choice on the next push.
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+test:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_test.go"
+          - "**/*.test.*"
+          - "**/*.spec.*"
+          - "**/tests/**"
+          - "**/__tests__/**"

@@ -1,0 +1,48 @@
+# Weekly vulnerability sweep of the default branch, vendored from
+# contrl-co/workflows (audit.yml plus examples/consumer-audit.yml) and
+# specialized for this repo. PR-time scans in ci.yml cover what a PR
+# touches; this catches CVEs disclosed while the repo is quiet. A failure
+# shows as a red run on the Actions tab, it blocks nothing.
+#
+name: audit
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # GOTOOLCHAIN=auto lets go fetch the toolchain the analyzer requires;
+      # the repo-pinned Go only bootstraps the download.
+      - env:
+          GOTOOLCHAIN: auto
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+  trivy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: >
+          docker run --rm -v "$PWD:/src" -w /src
+          aquasec/trivy:0.73.0@sha256:7cced7cae583819fc7806d4cbc0dbbc7cad18b99f7d3e235192e6da8c091045c
+          fs --scanners vuln,secret --exit-code 1 --severity CRITICAL,HIGH .
+
+  grype:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: >-
+          docker run --rm -v "$PWD:/src"
+          anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db
+          dir:/src --fail-on high
