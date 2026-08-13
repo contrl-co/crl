@@ -17,6 +17,8 @@ const manifest = readJSON("package.json");
 const languageConfig = readJSON("language-configuration.json");
 const grammar = readJSON("syntaxes/crl.tmLanguage.json");
 const snippets = readJSON("snippets/crl.json");
+const packagedLicense = fs.readFileSync(path.join(root, "LICENSE"), "utf8");
+const repositoryLicense = fs.readFileSync(path.join(root, "..", "..", "LICENSE"), "utf8");
 
 assert(manifest.main === "./extension.js", "package.json must point at extension.js");
 assert(
@@ -29,6 +31,10 @@ assert(
 );
 assert(languageConfig.comments.lineComment === "#", "CRL line comments must use #");
 assert(grammar.scopeName === "source.crl", "TextMate grammar must use source.crl scope");
+assert(
+  packagedLicense === repositoryLicense,
+  "packaged extension license must match the repository license"
+);
 
 const grammarText = JSON.stringify(grammar);
 for (const keyword of [

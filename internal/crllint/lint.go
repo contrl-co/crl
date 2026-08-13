@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.com/contrl-group/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crl"
 	"golang.org/x/text/unicode/norm"
 )
 

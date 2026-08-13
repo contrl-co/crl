@@ -3,7 +3,7 @@ package crlgraph
 import (
 	"sort"
 
-	"gitlab.com/contrl-group/crl/internal/crypto"
+	"github.com/contrl-co/crl/internal/crypto"
 )
 
 // Layout positions a Graph deterministically: nested entities (rule ▷ collector ▷
