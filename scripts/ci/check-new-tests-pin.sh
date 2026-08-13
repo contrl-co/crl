@@ -1,8 +1,8 @@
 #!/bin/sh
-# Merge gate: a test file added by an MR must fail against the base
+# Merge gate: a test file added by a PR must fail against the base
 # implementation. A new test that passes with the old implementation
 # pins nothing: it would stay green if the fix it claims to cover
-# regressed. Tests-only MRs are exempt.
+# regressed. Tests-only PRs are exempt.
 #
 # Granularity is the whole suite: the gate fails only when EVERY new
 # and changed test still passes on the base implementation. One
@@ -32,12 +32,12 @@ worktree=$(mktemp -d)
 trap 'git worktree remove --force "$worktree" 2>/dev/null || true' EXIT
 git worktree add --detach --force "$worktree" HEAD >/dev/null
 cd "$worktree"
-# Base implementation + the MR's tests. A compile failure counts as
+# Base implementation + the PR's tests. A compile failure counts as
 # pinning: the tests reference symbols the fix introduces.
 git checkout -q "$BASE" -- '*.go' ':(exclude)*_test.go'
 if go test ./... -count=1 >test-output.log 2>&1; then
     echo "FAIL: the full suite is green with the BASE implementation and"
-    echo "this MR's tests. The new test files above pin no behavior"
+    echo "this PR's tests. The new test files above pin no behavior"
     echo "change; make each one fail before its fix."
     exit 1
 fi

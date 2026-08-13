@@ -21,10 +21,10 @@ Security-relevant properties of this toolchain worth probing:
 
 ## Reporting
 
-Open a **confidential issue** on
-`https://gitlab.com/contrl-group/crl` (Issues → New issue → tick
-"This issue is confidential"). Include a minimal reproducing input
-where possible; `.crl` sources and facts JSON are ideal.
+Open a private vulnerability report through
+[GitHub Security Advisories](https://github.com/contrl-co/crl/security/advisories/new).
+Include a minimal reproducing input where possible; `.crl` sources and
+facts JSON are ideal.
 
 Please do not disclose publicly until a fix ships or 90 days pass,
 whichever comes first.
@@ -34,6 +34,6 @@ whichever comes first.
 - Acknowledgement: within 3 business days.
 - Fix SLA once a vulnerability is confirmed: **critical, 48 hours;
   high, 7 days**; others prioritized in the normal release flow.
-- Dependency scanning (trivy, grype) runs on every merge request and
+- Dependency scanning (Trivy and Grype) runs on every pull request and
   on a schedule; advisories affecting released artifacts are published
   in the release notes.

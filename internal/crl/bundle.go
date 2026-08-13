@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"gitlab.com/contrl-group/crl/internal/crypto"
+	"github.com/contrl-co/crl/internal/crypto"
 )
 
 type Bundle struct {

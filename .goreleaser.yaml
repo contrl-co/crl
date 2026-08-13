@@ -8,14 +8,6 @@ version: 2
 
 project_name: crlc
 
-# The release job authenticates with CI_JOB_TOKEN (GITLAB_TOKEN in
-# .gitlab-ci.yml). GoReleaser must be told the token is a job token, or
-# it calls PAT-only project endpoints a job token cannot use and the
-# publish step 404s. This switches it to CI_API_V4_URL/CI_PROJECT_ID and
-# the JOB-TOKEN header for the package-registry upload.
-gitlab_urls:
-  use_job_token: true
-
 builds:
   - id: crlc
     main: ./cmd/crlc
@@ -75,27 +67,37 @@ signs:
       - "${artifact}"
 
 release:
-  gitlab:
-    owner: contrl-group
+  github:
+    owner: contrl-co
     name: crl
   draft: false
-  mode: replace
+  prerelease: auto
+  mode: keep-existing
+  replace_existing_artifacts: false
+  extra_files:
+    - glob: editors/vscode/crl-language-support-*.vsix
 
 brews:
   - name: crlc
     ids: [crlc]
     description: "CRL (CONTRL Rule Language) toolchain: lint, compile, fmt, eval, graph"
-    homepage: https://gitlab.com/contrl-group/crl
+    homepage: https://github.com/contrl-co/crl
     license: AGPL-3.0-only
     directory: Formula
     skip_upload: false
     repository:
-      owner: contrl-group
+      owner: contrl-co
       name: homebrew-tap
-      # The tap's default branch is main; without this, goreleaser
-      # commits the formula to the crl project's default branch name
-      # (develop), which does not exist on the tap, and the push 400s.
-      branch: main
+      # The protected tap rejects direct release pushes. Generate one branch
+      # per version and open a reviewable PR against main instead.
+      branch: "release/crlc-{{ .Version }}"
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: contrl-co
+          name: homebrew-tap
+          branch: main
     test: |
       assert_match "editions: v1", shell_output("#{bin}/crlc version")
