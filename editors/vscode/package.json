@@ -19,6 +19,13 @@
     "check": "node --check extension.js && node scripts/check-assets.js",
     "package": "vsce package --out crl-language-support.vsix"
   },
+  "files": [
+    "LICENSE",
+    "extension.js",
+    "language-configuration.json",
+    "snippets/**",
+    "syntaxes/**"
+  ],
   "contributes": {
     "languages": [
       {
@@ -94,11 +101,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/contrl-group/crl.git",
+    "url": "https://github.com/contrl-co/crl.git",
     "directory": "editors/vscode"
   },
   "bugs": {
-    "url": "https://gitlab.com/contrl-group/crl/-/issues"
+    "url": "https://github.com/contrl-co/crl/issues"
   },
   "license": "AGPL-3.0-only",
   "keywords": [

@@ -104,7 +104,7 @@ Prints the toolchain version and the editions it implements.
 The same operations are available as a Go library:
 
 ```go
-import crl "gitlab.com/contrl-group/crl"
+import crl "github.com/contrl-co/crl"
 
 compiled, err := crl.Compile(source)          // canonical text + hash
 report := crl.Lint("policy.crl", source)      // CRL### diagnostics

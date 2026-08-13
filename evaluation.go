@@ -1,8 +1,8 @@
 package crl
 
 import (
-	lang "gitlab.com/contrl-group/crl/internal/crl"
-	"gitlab.com/contrl-group/crl/internal/crllint"
+	lang "github.com/contrl-co/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crllint"
 )
 
 // Evaluation is the outcome of evaluating a compiled bundle against a

@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.com/contrl-group/crl/internal/crl"
-	"gitlab.com/contrl-group/crl/internal/crypto"
+	"github.com/contrl-co/crl/internal/crl"
+	"github.com/contrl-co/crl/internal/crypto"
 )
 
 // NodeKind is the CRL entity a node represents.
