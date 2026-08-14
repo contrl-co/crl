@@ -9,6 +9,16 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ## [Unreleased]
 
+### Changed
+
+- The license is declared AGPL-3.0-only everywhere. The LICENSE grant
+  notice named no version, which under AGPL section 14 lets recipients
+  pick any published version, while the release metadata already said
+  `AGPL-3.0-only` in three places. The notice now says version 3 only,
+  and the README, CONTRIBUTING, and TRADEMARKS wording matches. No
+  change for users of version 3; the change removes the option to adopt
+  a future license version Contrl has not reviewed.
+
 ### Security
 
 - The pinned Go toolchain is updated to 1.25.12 to fix the reachable
