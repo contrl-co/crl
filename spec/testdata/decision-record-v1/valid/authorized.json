@@ -1,0 +1,119 @@
+{
+  "context": {
+    "correlation_id": "01989f7e-7b80-7000-8000-000000000002",
+    "domain": "contrl.co/example",
+    "subject": "example:record:1"
+  },
+  "created_at": "2026-08-06T15:00:00Z",
+  "evaluation": {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "approved": true,
+      "observed_at.approved": "2026-08-06T14:00:00Z",
+      "provider.registry": true
+    },
+    "outcome": "AUTHORIZED",
+    "provenance": [
+      {
+        "fact": "approved",
+        "observed_at": "2026-08-06T14:00:00Z",
+        "source": "/evidence/registry.json",
+        "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3",
+        "supplier": "example-registry"
+      },
+      {
+        "fact": "provider.registry",
+        "observed_at": "2026-08-06T14:00:00Z",
+        "source": "/evidence/registry.json",
+        "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3",
+        "supplier": "example-registry"
+      }
+    ],
+    "trace": {
+      "aspect": "example.record",
+      "authorized": true,
+      "checks": [
+        {
+          "actual": true,
+          "expected": true,
+          "field": "approved",
+          "kind": "need",
+          "operator": "==",
+          "passed": true,
+          "rule_name": "allow",
+          "scope": "rule"
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "field": "quorum",
+          "kind": "quorum",
+          "operator": "==",
+          "passed": true,
+          "providers": [
+            {
+              "present": true,
+              "provider": "registry"
+            }
+          ],
+          "quorum_expression": "registry",
+          "rule_name": "allow",
+          "scope": "rule"
+        }
+      ],
+      "clusters": [],
+      "global_checks": [],
+      "result": "AUTHORIZED",
+      "rules": [
+        {
+          "aspect": "example.record",
+          "authorized": true,
+          "checks": [
+            {
+              "actual": true,
+              "expected": true,
+              "field": "approved",
+              "kind": "need",
+              "operator": "==",
+              "passed": true,
+              "rule_name": "allow",
+              "scope": "rule"
+            },
+            {
+              "actual": true,
+              "expected": true,
+              "field": "quorum",
+              "kind": "quorum",
+              "operator": "==",
+              "passed": true,
+              "providers": [
+                {
+                  "present": true,
+                  "provider": "registry"
+                }
+              ],
+              "quorum_expression": "registry",
+              "rule_name": "allow",
+              "scope": "rule"
+            }
+          ],
+          "result": "AUTHORIZED",
+          "rule_name": "allow"
+        }
+      ]
+    },
+    "trace_hash": "ec9d0e2a5a76ca3a343b2371555846bf4e4039921ba71531d22cd106b842fada"
+  },
+  "record_hash": "2b70157378b0e45e636649ea8abaeaea2c2ebf6e7477ada1896e2a01b6050e14",
+  "record_id": "01989f7e-7b80-7000-8000-000000000001",
+  "rule": {
+    "bundle_hash": "f2b9cb4b12f279bc27139b8e1c5c431cb36ef2a2c66d342fdc55ac63a4c747aa",
+    "canonical_bundle": "{\"name\":\"example.record\",\"package\":\"example\",\"rules\":[{\"collectors\":[{\"connector_kind\":\"api\",\"name\":\"registry\",\"provider_type\":\"registry\",\"signals\":[{\"expiry\":{\"literal\":\"30d\",\"mode\":\"ttl\",\"seconds\":2592000},\"kind\":\"bool\",\"name\":\"approved\",\"source_field\":\"approved\"}],\"source\":\"/evidence/registry.json\"}],\"name\":\"allow\",\"predicates\":[{\"field\":\"approved\",\"kind\":\"need\",\"operator\":\"==\",\"value\":{\"bool\":true,\"kind\":\"bool\"}},{\"expression\":{\"kind\":\"subject\",\"name\":\"registry\"},\"field\":\"quorum\",\"kind\":\"quorum\",\"operator\":\"==\",\"value\":{\"bool\":true,\"kind\":\"bool\"}}],\"target\":\"example.record\"}],\"version\":\"crl/v1\"}",
+    "canonical_text": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry",
+    "edition": "v1",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "source_hash": "b9fe00a72b027735ab86ec07581bbc97e4f10f9e8fd448c4cda15b7dc1c5d569"
+  },
+  "schema_version": "crl-decision-record/v1",
+  "signatures": []
+}

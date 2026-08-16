@@ -20,6 +20,7 @@ every claim here is checked against it, and every example compiles
 | [semantics.md](semantics.md) | Evaluation: the five outcomes, freshness, quorum, temporal predicates, composition |
 | [canonical-form.md](canonical-form.md) | Canonical text, canonical JSON, and content addressing |
 | [editions.md](editions.md) | The edition contract and the status of v1 |
+| [decision-record-v1.md](decision-record-v1.md) | Portable decision records, provenance, hashes, and signature envelopes |
 
 ## The contract in three sentences
 
