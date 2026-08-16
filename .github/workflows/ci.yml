@@ -105,6 +105,15 @@ jobs:
       - run: go run ./cmd/crlc lint examples/
       - run: go run ./cmd/crlc eval -facts examples/facts/permit_quorum_2of3.authorized.json -at 2026-06-02T00:00:00Z -require-authorized examples/permit_quorum_2of3.crl
 
+  # The installer must fail closed: no cosign refuses, the explicit
+  # CRLC_ALLOW_UNVERIFIED=1 opt-out is checksum-only recovery with a
+  # warning, and an observed cosign rejection is never bypassable.
+  install-script:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sh scripts/ci/test-install-script.sh
+
   # A compiler change that moves hashes of unchanged source must carry a
   # "hashes moved" CHANGELOG entry (spec/editions.md).
   hash-disclosure:
@@ -213,6 +222,7 @@ jobs:
       - go
       - docs-lint
       - examples-lint
+      - install-script
       - hash-disclosure
       - new-tests-pin
       - golden-arm64
@@ -226,6 +236,7 @@ jobs:
           GO_RESULT: ${{ needs.go.result }}
           DOCS_LINT_RESULT: ${{ needs.docs-lint.result }}
           EXAMPLES_LINT_RESULT: ${{ needs.examples-lint.result }}
+          INSTALL_SCRIPT_RESULT: ${{ needs.install-script.result }}
           HASH_DISCLOSURE_RESULT: ${{ needs.hash-disclosure.result }}
           NEW_TESTS_PIN_RESULT: ${{ needs.new-tests-pin.result }}
           GOLDEN_ARM64_RESULT: ${{ needs.golden-arm64.result }}
@@ -248,6 +259,7 @@ jobs:
           require_result go "$GO_RESULT" success
           require_result docs-lint "$DOCS_LINT_RESULT" success
           require_result examples-lint "$EXAMPLES_LINT_RESULT" success
+          require_result install-script "$INSTALL_SCRIPT_RESULT" success
           require_result golden-arm64 "$GOLDEN_ARM64_RESULT" success
           require_result vscode-extension "$VSCODE_EXTENSION_RESULT" success
 
