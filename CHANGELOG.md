@@ -9,6 +9,16 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ## [Unreleased]
 
+### Added
+
+- A browser build of the toolchain: `cmd/crl-wasm` compiles CRL, lints
+  it, projects its graph, and evaluates it against facts inside a web
+  page, with no server and no source leaving the tab. Build it with
+  `scripts/build-wasm.sh`; the JS contract is in
+  [docs/wasm.md](docs/wasm.md). CI gates that the artifact links only
+  the language, that it instantiates in a real JS host, and that it
+  compiles the example corpus to the same hashes `crlc` does.
+
 ### Security
 
 - The pinned Go toolchain is updated to 1.25.12 to fix the reachable
