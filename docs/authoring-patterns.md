@@ -123,6 +123,128 @@ corroborate independently — counting both overstates how many separate
 sources agree. The linter flags this as **CRL211**; give each
 independent input its own source, or count only over distinct sources.
 
+## Multi-party acceptance (counterparty attestation)
+
+A public-private partnership milestone often must not authorize until
+named parties have accepted it — a granting authority *and* a
+concessionaire, or two of three where a lender's technical adviser can
+stand in for one of them. CRL expresses this with what it already has:
+`attestation` is a `connector_kind`, each accepting party is its own
+collector, and quorum spans parties exactly as it spans any other
+evidence source. There is no separate signature or approval construct.
+
+```crl
+crl v1
+package examples.concession
+bundle milestone.acceptance
+
+rule milestone_accepted
+    target concession.milestone
+    collector authority_acceptance granting_authority attestation from /bundles/authority-acceptance.json
+        signal authority_accepted bool from acceptance.accepted ttl 90d
+    collector concessionaire_acceptance concessionaire attestation from /bundles/concessionaire-acceptance.json
+        signal concessionaire_accepted bool from acceptance.accepted ttl 90d
+    need authority_accepted == true
+    need concessionaire_accepted == true
+    quorum authority_acceptance & concessionaire_acceptance
+```
+
+Each party attests through its own collector against its own source,
+so each acceptance is an independent input with its own freshness
+contract — the `CRL211` distinctness rule above applies here too. The
+`need` predicates check what was accepted; the quorum checks that both
+parties' attestations are present at all.
+
+An acceptance that has not arrived is a missing fact, not a `false`
+one. The rule yields `INSUFFICIENT_EVIDENCE` and authorizes nothing —
+acceptance gates effect, and this fails closed. Silence is never read
+as consent, and no ordering of arrivals can produce a decision that
+one of the named parties never made.
+
+When one party's acceptance may be substituted, give each acceptance
+its own rule and count the rules in the bundle's final policy. Count
+quorum at rule scope counts collectors; at global scope it counts
+rules, which is what lets an entire party's acceptance be optional.
+
+```crl
+crl v1
+package examples.concession
+bundle milestone.acceptance
+
+quorum 2 of 3 authority_accepts concessionaire_accepts adviser_accepts
+
+rule authority_accepts
+    target concession.milestone
+    collector authority_acceptance granting_authority attestation from /bundles/authority-acceptance.json
+        signal authority_accepted bool from acceptance.accepted ttl 90d
+    need authority_accepted == true
+    quorum authority_acceptance
+
+rule concessionaire_accepts
+    target concession.milestone
+    collector concessionaire_acceptance concessionaire attestation from /bundles/concessionaire-acceptance.json
+        signal concessionaire_accepted bool from acceptance.accepted ttl 90d
+    need concessionaire_accepted == true
+    quorum concessionaire_acceptance
+
+rule adviser_accepts
+    target concession.milestone
+    collector adviser_acceptance technical_adviser attestation from /bundles/adviser-acceptance.json
+        signal adviser_accepted bool from acceptance.accepted ttl 90d
+    need adviser_accepted == true
+    quorum adviser_acceptance
+```
+
+Each rule proves one party accepted: present evidence, fresh, and
+affirmative. The final policy needs any two of the three to have done
+so, so the adviser can substitute for either counterparty. A party who
+has not accepted contributes nothing to the count — an unproven rule
+is a definite `false` and can never be negated into a clearance.
+
+If one party is not substitutable, say so in boolean form instead. Here
+the granting authority must always accept, and the adviser may stand in
+only for the concessionaire:
+
+```crl
+crl v1
+package examples.concession
+bundle milestone.acceptance
+
+quorum authority_accepts & (concessionaire_accepts | adviser_accepts)
+
+rule authority_accepts
+    target concession.milestone
+    collector authority_acceptance granting_authority attestation from /bundles/authority-acceptance.json
+        signal authority_accepted bool from acceptance.accepted ttl 90d
+    need authority_accepted == true
+    quorum authority_acceptance
+
+rule concessionaire_accepts
+    target concession.milestone
+    collector concessionaire_acceptance concessionaire attestation from /bundles/concessionaire-acceptance.json
+        signal concessionaire_accepted bool from acceptance.accepted ttl 90d
+    need concessionaire_accepted == true
+    quorum concessionaire_acceptance
+
+rule adviser_accepts
+    target concession.milestone
+    collector adviser_acceptance technical_adviser attestation from /bundles/adviser-acceptance.json
+        signal adviser_accepted bool from acceptance.accepted ttl 90d
+    need adviser_accepted == true
+    quorum adviser_acceptance
+```
+
+The `ttl` on an attestation signal is a governance decision worth
+making explicitly: it is how long an acceptance stays good for. Under
+`ttl 90d` an acceptance is usable for ninety days after it was
+observed; past that the rule reports `EXPIRED` until the party attests
+again. An acceptance that must be renewed as circumstances change is a
+different instrument from one given once and standing indefinitely, and
+CRL makes you write down which one you mean. Use `expires <RFC3339>`
+instead when acceptance lapses on a fixed calendar date — a consent
+period ending with a financial year, say — rather than on a rolling
+window from whenever it was given.
+
 ## Object-block style
 
 ```crl
