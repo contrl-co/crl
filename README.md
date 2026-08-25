@@ -95,7 +95,8 @@ the platform is accountable for operating it.
 ## License
 
 Code and specification are licensed under
-[AGPL-3.0](LICENSE) (GNU Affero General Public License, version 3).
+[AGPL-3.0-only](LICENSE) (GNU Affero General Public License, version 3
+only).
 The CRL and CONTRL names are trademarks — see
 [TRADEMARKS.md](TRADEMARKS.md).
 
