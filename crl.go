@@ -22,6 +22,7 @@ import (
 	lang "github.com/contrl-co/crl/internal/crl"
 	"github.com/contrl-co/crl/internal/crlgraph"
 	"github.com/contrl-co/crl/internal/crllint"
+	"github.com/contrl-co/crl/internal/crypto"
 )
 
 // EditionV1 is the current (and only) CRL edition. An edition is a
@@ -33,6 +34,10 @@ const EditionV1 = "v1"
 // ErrUnknownEdition is returned by CompileEdition for any edition this
 // toolchain does not implement.
 var ErrUnknownEdition = errors.New("crl: unknown edition")
+
+// ErrNoProgram is returned by CanonicalBundle for a Compiled that did not
+// come from the compiler, and therefore addresses no program.
+var ErrNoProgram = errors.New("crl: compiled bundle carries no program")
 
 // Result is one of the five evaluation outcomes. Every consumer of CRL
 // evaluations must handle all five spellings.
@@ -76,6 +81,26 @@ type Compiled struct {
 	Hash string `json:"hash"`
 
 	program lang.CompiledBundle
+}
+
+// CanonicalBundle returns the exact bytes Hash is taken over: the canonical
+// JSON encoding of the compiled bundle.
+//
+// A consumer holding these bytes verifies Hash with SHA-256 and nothing else —
+// no parser, no compiler, no second serializer. That is what lets a registry
+// accept a compiled bundle it has no ability to compile for itself, and it is
+// why the bytes are exposed rather than recomputed downstream: a second
+// encoder is a second answer.
+//
+// Fails closed on a Compiled that did not come from the compiler, for the same
+// reason EvaluateAt does — a zero-value or JSON-round-tripped Compiled carries
+// no program, and returning some other bundle's bytes under this Hash would be
+// worse than returning none.
+func (c Compiled) CanonicalBundle() ([]byte, error) {
+	if c.program.Hash == "" || c.program.Hash != c.Hash {
+		return nil, ErrNoProgram
+	}
+	return crypto.CanonicalJSON(c.program.Program)
 }
 
 // Compile compiles CRL source under the current edition.
