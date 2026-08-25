@@ -28,6 +28,7 @@ import (
 
 	crl "github.com/contrl-co/crl"
 	"github.com/contrl-co/crl/internal/crllint"
+	"github.com/contrl-co/crl/internal/pbenvelope"
 )
 
 // version is stamped at release time via -ldflags "-X main.version=...".
@@ -310,11 +311,11 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("crlc compile", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	edition := flags.String("edition", crl.EditionV1, "edition to compile under")
-	format := flags.String("format", "text", "output format: text or json")
+	format := flags.String("format", "text", "output format: text, json, or proto")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if *format != "text" && *format != "json" {
+	if *format != "text" && *format != "json" && *format != "proto" {
 		if _, err := fmt.Fprintf(stderr, "crlc compile: unsupported format %q\n", *format); err != nil {
 			return 2
 		}
@@ -325,6 +326,35 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return code
 	}
 	compiled, err := crl.CompileEdition(source, *edition)
+	if *format == "proto" {
+		// The envelope is transport, not a record: on failure there is
+		// nothing to carry, so the error goes to stderr like the text
+		// form rather than becoming a field a consumer has to check.
+		if err != nil {
+			if _, writeErr := fmt.Fprintf(stderr, "crlc compile: %v\n", err); writeErr != nil {
+				return 1
+			}
+			return 1
+		}
+		bundle, bundleErr := compiled.CanonicalBundle()
+		if bundleErr != nil {
+			if _, writeErr := fmt.Fprintf(stderr, "crlc compile: %v\n", bundleErr); writeErr != nil {
+				return 1
+			}
+			return 1
+		}
+		envelope := pbenvelope.CompiledBundle{
+			Edition:         compiled.Edition,
+			SourceHash:      compiled.SourceHash,
+			CanonicalText:   compiled.CanonicalText,
+			CanonicalBundle: bundle,
+			Hash:            compiled.Hash,
+		}
+		if _, writeErr := stdout.Write(envelope.Marshal()); writeErr != nil {
+			return 1
+		}
+		return 0
+	}
 	if *format == "json" {
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
