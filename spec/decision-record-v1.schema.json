@@ -1,0 +1,531 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contrl.co/schemas/crl/decision-record-v1.schema.json",
+  "title": "CRL decision record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "created_at",
+    "context",
+    "rule",
+    "evaluation",
+    "record_hash",
+    "signatures"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "crl-decision-record/v1"
+    },
+    "record_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "context": {
+      "$ref": "#/$defs/context"
+    },
+    "rule": {
+      "$ref": "#/$defs/rule"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/evaluation"
+    },
+    "record_hash": {
+      "$ref": "#/$defs/digest"
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/signature"
+      },
+      "uniqueItems": true
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9.-]{1,62}/[a-z][a-z0-9._-]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonValue"
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{0,8}[1-9])?Z$"
+    },
+    "safeNumber": {
+      "type": "number",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "factValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/safeNumber"
+        }
+      ]
+    },
+    "jsonValue": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/safeNumber"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      ]
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain",
+        "subject",
+        "correlation_id"
+      ],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{1,62}/[a-z][a-z0-9._-]{0,63}$"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edition",
+        "source",
+        "source_hash",
+        "canonical_text",
+        "canonical_bundle",
+        "bundle_hash"
+      ],
+      "properties": {
+        "edition": {
+          "const": "v1"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "canonical_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_bundle": {
+          "type": "string",
+          "contentMediaType": "application/json",
+          "minLength": 2
+        },
+        "bundle_hash": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact",
+        "supplier",
+        "source",
+        "source_digest",
+        "observed_at"
+      ],
+      "properties": {
+        "fact": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "supplier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "source_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "facts",
+        "provenance",
+        "outcome",
+        "trace",
+        "trace_hash"
+      ],
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "facts": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/factValue"
+          }
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provenance"
+          },
+          "uniqueItems": true
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcome"
+        },
+        "trace": {
+          "$ref": "#/$defs/trace"
+        },
+        "trace_hash": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "AUTHORIZED",
+        "DENIED",
+        "BLOCKED",
+        "INSUFFICIENT_EVIDENCE",
+        "EXPIRED"
+      ]
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "present"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "present": {
+          "type": "boolean"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operator",
+        "passed"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "need",
+            "block",
+            "quorum",
+            "temporal"
+          ]
+        },
+        "rule_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cluster_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "rule",
+            "cluster"
+          ]
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "enum": [
+            "",
+            "==",
+            "!=",
+            ">",
+            ">=",
+            "<",
+            "<="
+          ]
+        },
+        "expected": {
+          "$ref": "#/$defs/factValue"
+        },
+        "actual": {
+          "$ref": "#/$defs/factValue"
+        },
+        "quorum_expression": {
+          "type": "string",
+          "minLength": 1
+        },
+        "temporal_relation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "temporal_reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "temporal_window": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provider"
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ruleTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_name",
+        "aspect",
+        "result",
+        "authorized",
+        "checks"
+      ],
+      "properties": {
+        "rule_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aspect": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "$ref": "#/$defs/outcome"
+        },
+        "authorized": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        }
+      }
+    },
+    "clusterMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_name",
+        "result",
+        "authorized"
+      ],
+      "properties": {
+        "rule_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "$ref": "#/$defs/outcome"
+        },
+        "authorized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "clusterTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cluster_name",
+        "result",
+        "authorized",
+        "members",
+        "checks"
+      ],
+      "properties": {
+        "cluster_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "$ref": "#/$defs/outcome"
+        },
+        "authorized": {
+          "type": "boolean"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clusterMember"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "authorized",
+        "aspect",
+        "rules",
+        "clusters",
+        "global_checks",
+        "checks"
+      ],
+      "properties": {
+        "result": {
+          "$ref": "#/$defs/outcome"
+        },
+        "authorized": {
+          "type": "boolean"
+        },
+        "aspect": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ruleTrace"
+          }
+        },
+        "clusters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/clusterTrace"
+          }
+        },
+        "global_checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "key_id",
+        "role",
+        "signed_at",
+        "signature"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "ed25519"
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"
+        },
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{0,63}$"
+        },
+        "signed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$"
+        }
+      }
+    }
+  }
+}
