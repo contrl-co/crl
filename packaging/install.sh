@@ -6,12 +6,13 @@
 # Environment:
 #   CRLC_VERSION      release tag to install (default: latest)
 #   CRLC_INSTALL_DIR  target directory (default: ~/.local/bin)
+#   CRLC_ALLOW_UNVERIFIED=1 permits checksum-only installation when cosign
+#                         is unavailable (default: fail closed)
 #
 # The script downloads the release archive and checksums.txt, verifies
-# the archive's SHA-256 against the checksums file, and — when cosign
-# is installed — verifies the checksums file's keyless signature before
-# trusting it. Without cosign it proceeds on the published SHA-256 alone
-# and says so; install cosign for the full chain.
+# the archive's SHA-256 against the checksums file and verifies the checksum
+# manifest's keyless signature before trusting it. A checksum-only fallback
+# requires the explicit CRLC_ALLOW_UNVERIFIED=1 emergency opt-out.
 
 set -eu
 
@@ -95,8 +96,12 @@ if command -v cosign >/dev/null 2>&1; then
     esac
   fi
 else
-  echo "note: cosign not found; verifying SHA-256 only." >&2
-  echo "      install cosign to verify the release signature as well." >&2
+  if [ "${CRLC_ALLOW_UNVERIFIED:-0}" != 1 ]; then
+    echo "install.sh: cosign is required to verify CRL release provenance" >&2
+    echo "install cosign, or explicitly set CRLC_ALLOW_UNVERIFIED=1 for checksum-only recovery" >&2
+    exit 1
+  fi
+  echo "warning: CRLC_ALLOW_UNVERIFIED=1; verifying SHA-256 without signer identity" >&2
 fi
 
 echo "verifying SHA-256 ..."
