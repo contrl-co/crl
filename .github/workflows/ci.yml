@@ -113,6 +113,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: sh scripts/ci/test-install-script.sh
+  # The browser build of the toolchain. It has to do three things, and
+  # each is checked here: link nothing but the language (whatever it
+  # links is served to every visitor and decompiles), instantiate in a
+  # real JS host, and produce the same hashes crlc produces — a browser
+  # compiler that disagrees with the CLI would be worse than none.
+  wasm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # No package.json here: the smoke harness is plain Node with
+          # no dependencies, so there is nothing to cache.
+          node-version: 22.21.1
+      - run: sh scripts/build-wasm.sh
+      - name: Dependency and artifact surface
+        run: sh scripts/ci/check-wasm-deps.sh
+      - name: Load and evaluate in a JS host
+        run: node scripts/ci/wasm-smoke.cjs
 
   # A compiler change that moves hashes of unchanged source must carry a
   # "hashes moved" CHANGELOG entry (spec/editions.md).
@@ -223,6 +246,7 @@ jobs:
       - docs-lint
       - examples-lint
       - install-script
+      - wasm
       - hash-disclosure
       - new-tests-pin
       - golden-arm64
@@ -237,6 +261,7 @@ jobs:
           DOCS_LINT_RESULT: ${{ needs.docs-lint.result }}
           EXAMPLES_LINT_RESULT: ${{ needs.examples-lint.result }}
           INSTALL_SCRIPT_RESULT: ${{ needs.install-script.result }}
+          WASM_RESULT: ${{ needs.wasm.result }}
           HASH_DISCLOSURE_RESULT: ${{ needs.hash-disclosure.result }}
           NEW_TESTS_PIN_RESULT: ${{ needs.new-tests-pin.result }}
           GOLDEN_ARM64_RESULT: ${{ needs.golden-arm64.result }}
@@ -260,6 +285,7 @@ jobs:
           require_result docs-lint "$DOCS_LINT_RESULT" success
           require_result examples-lint "$EXAMPLES_LINT_RESULT" success
           require_result install-script "$INSTALL_SCRIPT_RESULT" success
+          require_result wasm "$WASM_RESULT" success
           require_result golden-arm64 "$GOLDEN_ARM64_RESULT" success
           require_result vscode-extension "$VSCODE_EXTENSION_RESULT" success
 
