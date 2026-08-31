@@ -22,8 +22,22 @@ weekly; the v1 edition's compilation contract does not change (see
   opposite decisions.
 - Quorum evaluation is three-valued (Kleene): a missing subject is
   *unknown*, so a negated absent subject (`not <absent>`) can no longer
-  read as a clearance. Freshness taints a whole quorum: a stale subject
-  fails the check as expired regardless of boolean structure.
+  read as a clearance. A stale subject is unknown too — it can neither
+  carry a branch nor read as cleared under negation.
+- **Quorum thresholds now enforce freshness.** A quorum subject that
+  names a collector is judged on the signals that collector declares;
+  previously only a subject that named a signal was checked, and a
+  collector name matched nothing in the signal index, so a count quorum
+  consulted no expiry at all and evidence of any age satisfied it —
+  evidence stamped in 1999 met a thirty-day window and authorized. A
+  stale subject now reduces the count instead of being ignored, and
+  instead of disqualifying a boolean expression, so "two of three
+  independent sources, currently fresh" is expressible in both forms: a
+  disjunction still passes on the branches whose evidence is fresh.
+  An unmet quorum reports `EXPIRED` when re-observing the stale
+  subjects would reach the threshold, and `INSUFFICIENT_EVIDENCE` when
+  the threshold is out of reach on the evidence present. Bundle hashes
+  are unaffected — this changes evaluation, not compilation.
 - Evaluation fails closed in more places: a stale, future-dated, or
   unprovable observation is `EXPIRED`; a zero-value or round-tripped
   compiled bundle no longer authorizes; an empty program authorizes

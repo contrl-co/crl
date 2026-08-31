@@ -566,7 +566,7 @@ func parseValue(raw string) (Value, error) {
 	return Value{Kind: "number", Number: n}, nil
 }
 
-func evaluatePredicate(rule Predicate, facts Facts, signals map[string]Signal, now time.Time) Check {
+func evaluatePredicate(rule Predicate, facts Facts, index evidenceIndex, now time.Time) Check {
 	check := Check{
 		Kind:     rule.Kind,
 		Field:    rule.Field,
@@ -574,10 +574,10 @@ func evaluatePredicate(rule Predicate, facts Facts, signals map[string]Signal, n
 		Expected: rule.Value,
 	}
 	if rule.Kind == PredicateQuorum {
-		return evaluateQuorum(rule, facts, signals, now, check)
+		return evaluateQuorum(rule, facts, index, now, check)
 	}
 	if rule.Kind == PredicateTemporal {
-		return evaluateTemporal(rule, facts, signals, now, check)
+		return evaluateTemporal(rule, facts, index, now, check)
 	}
 	actual, ok := lookupFact(facts, rule.Field)
 	if !ok {
@@ -585,7 +585,7 @@ func evaluatePredicate(rule Predicate, facts Facts, signals map[string]Signal, n
 		return check
 	}
 	check.Actual = actual
-	if expired, ok := signalExpired(signals[rule.Field], facts, now); ok && expired {
+	if expired, ok := signalExpired(index.signals[rule.Field], facts, now); ok && expired {
 		check.Reason = ErrExpired.Error()
 		return check
 	}
@@ -604,7 +604,7 @@ func evaluatePredicate(rule Predicate, facts Facts, signals map[string]Signal, n
 	return check
 }
 
-func evaluateTemporal(rule Predicate, facts Facts, signals map[string]Signal, now time.Time, check Check) Check {
+func evaluateTemporal(rule Predicate, facts Facts, index evidenceIndex, now time.Time, check Check) Check {
 	check.Expected = Value{}
 	if rule.Temporal == nil {
 		check.Reason = ErrInvalidSyntax.Error()
@@ -625,11 +625,11 @@ func evaluateTemporal(rule Predicate, facts Facts, signals map[string]Signal, no
 		return check
 	}
 	check.Actual = actual.Format(time.RFC3339)
-	if expired, ok := signalExpired(signals[rule.Field], facts, now); ok && expired {
+	if expired, ok := signalExpired(index.signals[rule.Field], facts, now); ok && expired {
 		check.Reason = ErrExpired.Error()
 		return check
 	}
-	reference, ok, reason := temporalReferenceTime(rule.Temporal.Reference, facts, signals, now)
+	reference, ok, reason := temporalReferenceTime(rule.Temporal.Reference, facts, index, now)
 	if !ok {
 		check.Reason = reason
 		return check
@@ -689,52 +689,65 @@ func evaluateBlock(field string, actual any) (bool, string) {
 	return false, ErrBlocked.Error()
 }
 
-func evaluateQuorum(rule Predicate, facts Facts, signals map[string]Signal, now time.Time, check Check) Check {
+func evaluateQuorum(rule Predicate, facts Facts, index evidenceIndex, now time.Time, check Check) Check {
 	if rule.Expression != nil {
 		check.QuorumExpression = RenderQuorumExpression(rule.Expression)
 		subjects := QuorumExpressionSubjects(rule.Expression)
 		check.Providers = make([]ProviderPresence, 0, len(subjects))
-		staleSubject := false
+		anyStale := false
 		for _, subject := range subjects {
-			if signalUnavailable(signals, subject, facts, now) {
-				staleSubject = true
+			if subjectStale(facts, subject, index, now) {
+				anyStale = true
 			}
-			check.Providers = append(check.Providers, ProviderPresence{Provider: subject, Present: subjectPresent(facts, subject, signals, now)})
+			check.Providers = append(check.Providers, ProviderPresence{Provider: subject, Present: subjectPresent(facts, subject, index, now)})
 		}
-		// If the expression references a signal whose freshness cannot be
-		// proven, fail CLOSED regardless of boolean structure. Assigning a
-		// truthy/falsy value per-subject would let a negated stale subject
-		// (e.g. `!safety_hold`) read as "cleared" — fail open. An
-		// unprovable input taints the whole quorum.
-		if staleSubject {
-			check.Actual = false
-			check.Passed = false
-			check.Reason = ErrExpired.Error()
-			return check
-		}
-		passed := evalQuorumTri(rule.Expression, facts, signals, now) == quorumTrue
+		passed := evalQuorumTri(rule.Expression, facts, index, now, enforceFreshness) == quorumTrue
 		check.Actual = passed
 		check.Passed = passed
 		if !check.Passed {
-			check.Reason = ErrQuorumNotMet.Error()
+			// A stale subject is unknown, so it can neither carry a branch
+			// nor falsify one its siblings could carry. Whether the
+			// SHORTFALL is the staleness is answered by re-evaluating with
+			// the stale evidence assumed re-observed at its current value.
+			metIfFresh := anyStale && evalQuorumTri(rule.Expression, facts, index, now, assumeFresh) == quorumTrue
+			check.Reason = quorumShortfallReason(metIfFresh)
 		}
 		return check
 	}
-	count := 0
+	fresh, stale := 0, 0
 	check.Providers = make([]ProviderPresence, 0, len(rule.Providers))
 	for _, provider := range rule.Providers {
-		present := subjectPresent(facts, provider, signals, now)
-		if present {
-			count++
+		present := subjectPresent(facts, provider, index, now)
+		switch {
+		case present:
+			fresh++
+		case subjectTruthy(facts, provider):
+			// The evidence is there but its age cannot be proven. It does
+			// not count — and it is why the threshold may fall short.
+			stale++
 		}
 		check.Providers = append(check.Providers, ProviderPresence{Provider: provider, Present: present})
 	}
-	check.Actual = count
-	check.Passed = float64(count) >= rule.Value.Number
+	check.Actual = fresh
+	check.Passed = float64(fresh) >= rule.Value.Number
 	if !check.Passed {
-		check.Reason = ErrQuorumNotMet.Error()
+		check.Reason = quorumShortfallReason(float64(fresh+stale) >= rule.Value.Number)
 	}
 	return check
+}
+
+// quorumShortfallReason spells why a quorum was not met. When the stale
+// subjects alone stand between the evidence and the threshold —
+// re-observing them at the values they already carry would satisfy it —
+// the check reports expired, because that is what "a required fact is no
+// longer fresh" means. When even fresh evidence would not reach the
+// threshold, the quorum is unmet on the evidence itself and reports
+// quorum-not-met, which selects INSUFFICIENT_EVIDENCE.
+func quorumShortfallReason(staleIsTheShortfall bool) string {
+	if staleIsTheShortfall {
+		return ErrExpired.Error()
+	}
+	return ErrQuorumNotMet.Error()
 }
 
 func compare(actual any, op string, expected Value) (bool, error) {
@@ -894,7 +907,7 @@ func timeFact(value any) (time.Time, bool) {
 	}
 }
 
-func temporalReferenceTime(reference string, facts Facts, signals map[string]Signal, now time.Time) (time.Time, bool, string) {
+func temporalReferenceTime(reference string, facts Facts, index evidenceIndex, now time.Time) (time.Time, bool, string) {
 	reference = normalizeTemporalReference(reference)
 	if reference == "now" {
 		if now.IsZero() {
@@ -913,7 +926,7 @@ func temporalReferenceTime(reference string, facts Facts, signals map[string]Sig
 	// unknown-age reference must fail closed just like the temporal
 	// field would — otherwise a comparison "before/after <deadline>"
 	// silently trusts an expired deadline.
-	if signalUnavailable(signals, reference, facts, now) {
+	if subjectStale(facts, reference, index, now) {
 		return time.Time{}, false, ErrExpired.Error()
 	}
 	parsed, ok := timeFact(raw)
@@ -947,27 +960,76 @@ func lookupFact(facts Facts, field string) (any, bool) {
 	return value, ok
 }
 
-// signalUnavailable reports whether name refers to a declared
-// ttl/expires signal whose freshness cannot be proven at now (stale,
-// missing/unparseable observed_at, or zero clock). Such a signal is
-// treated as unavailable wherever it is consulted — need/block already
-// surface EXPIRED; quorum and temporal-reference paths route through
-// here so stale evidence never silently satisfies a gate. Non-signal
-// subjects (collectors, rule/cluster names) miss the index and are
-// unaffected.
-func signalUnavailable(signals map[string]Signal, name string, facts Facts, now time.Time) bool {
-	if signals == nil {
-		return false
+// evidenceIndex resolves a name to the declared signals whose freshness
+// governs it: signals by their own name, and collectors by the signals
+// they declare.
+type evidenceIndex struct {
+	signals    map[string]Signal
+	collectors map[string][]Signal
+}
+
+// governing returns the declared signals whose freshness gates name.
+//
+// A signal governs itself. A COLLECTOR has no observation time of its
+// own — its quorum subject fact is bare presence — so it is governed by
+// the signals it declares; without this, a count quorum over collectors
+// consulted no expiry at all and evidence of any age satisfied it.
+//
+// A collector's signal governs only once the facts put it in play, by
+// carrying either its value or an observation time. Evidence that was
+// never supplied is absent, not stale, and the two are different
+// outcomes: judging an unsupplied signal as expired would report
+// EXPIRED for a bundle that simply has no evidence yet, and would make
+// an `optional` signal — declared skippable — permanently unprovable.
+// Supplying either half puts the signal in play, so a value with no
+// observation time is still unprovable and therefore stale.
+//
+// Rule and cluster names are governed by nothing here. A rule already
+// fails its own checks on stale evidence and publishes false, which
+// removes it from a quorum on its own.
+func (e evidenceIndex) governing(name string, facts Facts) []Signal {
+	name = normalizeIdentifier(name)
+	var governing []Signal
+	if signal, ok := e.signals[name]; ok {
+		governing = append(governing, signal)
 	}
-	expired, evaluated := signalExpired(signals[normalizeIdentifier(name)], facts, now)
-	return evaluated && expired
+	for _, signal := range e.collectors[name] {
+		if !signalInPlay(signal, facts) {
+			continue
+		}
+		governing = append(governing, signal)
+	}
+	return governing
+}
+
+// signalInPlay reports whether the facts carry evidence for a signal:
+// its value, or an observation time for it.
+func signalInPlay(signal Signal, facts Facts) bool {
+	if _, ok := lookupFact(facts, signal.Name); ok {
+		return true
+	}
+	_, ok := lookupFact(facts, "observed_at."+signal.Name)
+	return ok
+}
+
+// subjectStale reports whether the evidence behind name cannot be shown
+// fresh at now (stale, missing/unparseable observed_at, or zero clock).
+// Such evidence is unavailable wherever it is consulted — need/block
+// already surface EXPIRED; quorum and temporal-reference paths route
+// through here so stale evidence never silently satisfies a gate.
+func subjectStale(facts Facts, name string, index evidenceIndex, now time.Time) bool {
+	for _, signal := range index.governing(name, facts) {
+		if expired, evaluated := signalExpired(signal, facts, now); evaluated && expired {
+			return true
+		}
+	}
+	return false
 }
 
 // subjectPresent is subjectTruthy plus the freshness gate: a truthy but
-// stale (or unknown-age) ttl'd signal subject does not count toward a
-// quorum.
-func subjectPresent(facts Facts, subject string, signals map[string]Signal, now time.Time) bool {
-	return subjectTruthy(facts, subject) && !signalUnavailable(signals, subject, facts, now)
+// stale (or unknown-age) subject does not count toward a quorum.
+func subjectPresent(facts Facts, subject string, index evidenceIndex, now time.Time) bool {
+	return subjectTruthy(facts, subject) && !subjectStale(facts, subject, index, now)
 }
 
 func subjectTruthy(facts Facts, subject string) bool {
@@ -999,11 +1061,12 @@ func subjectTruthy(facts Facts, subject string) bool {
 	return false
 }
 
-// quorumTri is three-valued: a subject whose evidence is absent is unknown,
-// not false, so a negation cannot read missing evidence as "cleared". Stale
-// subjects are handled upstream by the whole-quorum taint; here unknown
-// propagates by Kleene logic, so a satisfiable branch (an OR with one
-// present side) still passes while `!absent` stays unknown and denies.
+// quorumTri is three-valued: a subject whose evidence is absent, or
+// present but not provably fresh, is unknown — not false, so a negation
+// cannot read it as "cleared", and not true, so it cannot carry a
+// branch. Unknown propagates by Kleene logic, so a satisfiable branch
+// (an OR with one present, fresh side) still passes while `!absent` and
+// `!stale` stay unknown and deny.
 type quorumTri int
 
 const (
@@ -1012,7 +1075,21 @@ const (
 	quorumUnknown
 )
 
-func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string]Signal, now time.Time) quorumTri {
+// quorumFreshness selects how a subject whose evidence is present but
+// whose age cannot be proven is valued.
+type quorumFreshness int
+
+const (
+	// enforceFreshness is the real evaluation: stale evidence is unknown.
+	enforceFreshness quorumFreshness = iota
+	// assumeFresh answers only the counterfactual "would this quorum be
+	// met if the stale evidence were re-observed at the value it already
+	// carries?" — which decides whether an unmet quorum reports EXPIRED
+	// or unmet-on-the-evidence. It never decides authorization.
+	assumeFresh
+)
+
+func evalQuorumTri(expression *QuorumExpression, facts Facts, index evidenceIndex, now time.Time, freshness quorumFreshness) quorumTri {
 	if expression == nil {
 		return quorumFalse
 	}
@@ -1021,12 +1098,15 @@ func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string
 		if !subjectValuePresent(facts, expression.Name) {
 			return quorumUnknown
 		}
+		if freshness == enforceFreshness && subjectStale(facts, expression.Name, index, now) {
+			return quorumUnknown
+		}
 		if subjectTruthy(facts, expression.Name) {
 			return quorumTrue
 		}
 		return quorumFalse
 	case "not":
-		switch evalQuorumTri(expression.Expr, facts, signals, now) {
+		switch evalQuorumTri(expression.Expr, facts, index, now, freshness) {
 		case quorumTrue:
 			return quorumFalse
 		case quorumFalse:
@@ -1035,8 +1115,8 @@ func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string
 			return quorumUnknown
 		}
 	case "and":
-		left := evalQuorumTri(expression.Left, facts, signals, now)
-		right := evalQuorumTri(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, index, now, freshness)
+		right := evalQuorumTri(expression.Right, facts, index, now, freshness)
 		if left == quorumFalse || right == quorumFalse {
 			return quorumFalse
 		}
@@ -1045,8 +1125,8 @@ func evalQuorumTri(expression *QuorumExpression, facts Facts, signals map[string
 		}
 		return quorumTrue
 	case "or":
-		left := evalQuorumTri(expression.Left, facts, signals, now)
-		right := evalQuorumTri(expression.Right, facts, signals, now)
+		left := evalQuorumTri(expression.Left, facts, index, now, freshness)
+		right := evalQuorumTri(expression.Right, facts, index, now, freshness)
 		if left == quorumTrue || right == quorumTrue {
 			return quorumTrue
 		}
