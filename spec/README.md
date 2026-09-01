@@ -18,6 +18,7 @@ every claim here is checked against it, and every example compiles
 | [object-model.md](object-model.md) | The authoring objects and the composition (expansion) model |
 | [rules-and-bundles.md](rules-and-bundles.md) | Per-object reference: rules, collectors, signals, predicates, clusters, global policy |
 | [semantics.md](semantics.md) | Evaluation: the five outcomes, freshness, quorum, temporal predicates, composition |
+| [expressiveness.md](expressiveness.md) | The boundary of the predicate surface: what CRL cannot express, and the cost of working around it |
 | [canonical-form.md](canonical-form.md) | Canonical text, canonical JSON, and content addressing |
 | [editions.md](editions.md) | The edition contract and the status of v1 |
 
