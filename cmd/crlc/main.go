@@ -299,12 +299,14 @@ func writeLintText(w io.Writer, reports []crllint.Report, quiet bool) error {
 // --- compile --------------------------------------------------------
 
 type compileOutput struct {
-	OK            bool   `json:"ok"`
-	Edition       string `json:"edition,omitempty"`
-	SourceHash    string `json:"source_hash,omitempty"`
-	CanonicalText string `json:"canonical_text,omitempty"`
-	Hash          string `json:"hash,omitempty"`
-	Error         string `json:"error,omitempty"`
+	OK              bool             `json:"ok"`
+	Edition         string           `json:"edition,omitempty"`
+	SourceHash      string           `json:"source_hash,omitempty"`
+	CanonicalText   string           `json:"canonical_text,omitempty"`
+	Hash            string           `json:"hash,omitempty"`
+	MetadataVersion int              `json:"metadata_version,omitempty"`
+	Program         *crl.ProgramView `json:"program,omitempty"`
+	Error           string           `json:"error,omitempty"`
 }
 
 func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -364,12 +366,15 @@ func runCompile(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 			return 1
 		}
+		program := compiled.Program()
 		if encodeErr := encoder.Encode(compileOutput{
-			OK:            true,
-			Edition:       compiled.Edition,
-			SourceHash:    compiled.SourceHash,
-			CanonicalText: compiled.CanonicalText,
-			Hash:          compiled.Hash,
+			OK:              true,
+			Edition:         compiled.Edition,
+			SourceHash:      compiled.SourceHash,
+			CanonicalText:   compiled.CanonicalText,
+			Hash:            compiled.Hash,
+			MetadataVersion: 1,
+			Program:         &program,
 		}); encodeErr != nil {
 			return 1
 		}

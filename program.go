@@ -1,6 +1,11 @@
 package crl
 
-import lang "github.com/contrl-co/crl/internal/crl"
+import (
+	"bytes"
+	"encoding/json"
+
+	lang "github.com/contrl-co/crl/internal/crl"
+)
 
 // Predicate kinds, as they appear in a PredicateView.Kind. An embedder
 // matches against these rather than hardcoding the strings.
@@ -48,12 +53,21 @@ type CollectorView struct {
 // SignalView is one typed fact a collector yields. Expiry is the
 // rendered freshness clause (e.g. "ttl 30d").
 type SignalView struct {
-	Name        string `json:"name"`
-	Kind        string `json:"kind"`
-	SourceField string `json:"source_field"`
-	Unit        string `json:"unit,omitempty"`
-	Optional    bool   `json:"optional,omitempty"`
-	Expiry      string `json:"expiry"`
+	Name        string        `json:"name"`
+	Kind        string        `json:"kind"`
+	SourceField string        `json:"source_field"`
+	Unit        string        `json:"unit,omitempty"`
+	Optional    bool          `json:"optional,omitempty"`
+	Expiry      string        `json:"expiry"`
+	Freshness   FreshnessView `json:"freshness"`
+}
+
+// FreshnessView carries normalized expiry without requiring consumers to parse CRL.
+// Mode "ttl" uses Seconds; mode "at" uses an RFC3339 timestamp in At.
+type FreshnessView struct {
+	Mode    string `json:"mode"`
+	Seconds int64  `json:"seconds,omitempty"`
+	At      string `json:"at,omitempty"`
 }
 
 // ClusterView is one cluster: the member rules it composes and its own
@@ -83,6 +97,23 @@ type ValueView struct {
 	Bool   bool    `json:"bool,omitempty"`
 	Number float64 `json:"number,omitempty"`
 	String string  `json:"string,omitempty"`
+}
+
+// MarshalJSON keeps numeric zero explicit without adding a number to other literal kinds.
+func (value ValueView) MarshalJSON() ([]byte, error) {
+	type plain ValueView
+	var number *float64
+	if value.Kind == "number" {
+		number = &value.Number
+	}
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(struct {
+		plain
+		Number *float64 `json:"number,omitempty"`
+	}{plain: plain(value), Number: number})
+	return output.Bytes(), err
 }
 
 // Program returns the read-only logical view of the compiled bundle.
@@ -116,6 +147,10 @@ func collectorViews(collectors []lang.Collector) []CollectorView {
 	for _, collector := range collectors {
 		signals := make([]SignalView, 0, len(collector.Signals))
 		for _, signal := range collector.Signals {
+			freshness := FreshnessView{Mode: signal.Expiry.Mode, Seconds: signal.Expiry.Seconds}
+			if signal.Expiry.Mode == "at" {
+				freshness.At = signal.Expiry.Literal
+			}
 			signals = append(signals, SignalView{
 				Name:        signal.Name,
 				Kind:        signal.Kind,
@@ -123,6 +158,7 @@ func collectorViews(collectors []lang.Collector) []CollectorView {
 				Unit:        signal.Unit,
 				Optional:    signal.Optional,
 				Expiry:      renderExpiry(signal.Expiry),
+				Freshness:   freshness,
 			})
 		}
 		out = append(out, CollectorView{
