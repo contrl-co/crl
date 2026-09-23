@@ -75,6 +75,7 @@ type SignalExpiry struct {
 
 type Predicate struct {
 	Kind       string              `json:"kind"`
+	Reference  string              `json:"reference,omitempty"`
 	Field      string              `json:"field,omitempty"`
 	Operator   string              `json:"operator"`
 	Value      Value               `json:"value"`
@@ -109,6 +110,7 @@ type Facts map[string]any
 
 type Check struct {
 	Kind              string             `json:"kind"`
+	Reference         string             `json:"reference,omitempty"`
 	RuleName          string             `json:"rule_name,omitempty"`
 	ClusterName       string             `json:"cluster_name,omitempty"`
 	Scope             string             `json:"scope,omitempty"`
@@ -134,6 +136,12 @@ func normalizePredicate(predicate Predicate) (Predicate, error) {
 	predicate.Kind = normalizeIdentifier(predicate.Kind)
 	if predicate.Kind == "" {
 		predicate.Kind = PredicateNeed
+	}
+	if predicate.Reference != "" {
+		predicate.Reference = normalizeIdentifier(predicate.Reference)
+		if predicate.Kind != PredicateNeed || !identifierPattern.MatchString(predicate.Reference) || predicate.Value != (Value{Kind: "number"}) {
+			return Predicate{}, fmt.Errorf("%w: invalid numeric signal reference", ErrInvalidSyntax)
+		}
 	}
 	switch predicate.Kind {
 	case PredicateNeed:
@@ -568,10 +576,14 @@ func parseValue(raw string) (Value, error) {
 
 func evaluatePredicate(rule Predicate, facts Facts, index evidenceIndex, now time.Time) Check {
 	check := Check{
-		Kind:     rule.Kind,
-		Field:    rule.Field,
-		Operator: rule.Operator,
-		Expected: rule.Value,
+		Kind:      rule.Kind,
+		Reference: rule.Reference,
+		Field:     rule.Field,
+		Operator:  rule.Operator,
+		Expected:  rule.Value,
+	}
+	if rule.Reference != "" {
+		check.Expected = Value{}
 	}
 	if rule.Kind == PredicateQuorum {
 		return evaluateQuorum(rule, facts, index, now, check)
@@ -595,7 +607,27 @@ func evaluatePredicate(rule Predicate, facts Facts, index evidenceIndex, now tim
 		check.Reason = reason
 		return check
 	}
-	passed, err := compare(actual, rule.Operator, rule.Value)
+	expected := rule.Value
+	if rule.Reference != "" {
+		raw, present := lookupFact(facts, rule.Reference)
+		if !present {
+			check.Reason = ErrUnknownFact.Error()
+			return check
+		}
+		if expired, evaluated := signalExpired(index.signals[rule.Reference], facts, now); evaluated && expired {
+			check.Reason = ErrExpired.Error()
+			return check
+		}
+		left, leftOK := numeric(actual)
+		right, rightOK := numeric(raw)
+		if !leftOK || !rightOK || math.IsNaN(left) || math.IsInf(left, 0) || math.IsNaN(right) || math.IsInf(right, 0) {
+			check.Reason = ErrTypeMismatch.Error()
+			return check
+		}
+		expected = Value{Kind: "number", Number: right}
+		check.Expected = expected
+	}
+	passed, err := compare(actual, rule.Operator, expected)
 	if err != nil {
 		check.Reason = err.Error()
 		return check

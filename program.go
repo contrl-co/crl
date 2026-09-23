@@ -69,6 +69,7 @@ type ClusterView struct {
 // QuorumExpression holds the rendered boolean form (only one is set).
 type PredicateView struct {
 	Kind             string     `json:"kind"`
+	Reference        string     `json:"reference,omitempty"`
 	Field            string     `json:"field,omitempty"`
 	Operator         string     `json:"operator,omitempty"`
 	Value            *ValueView `json:"value,omitempty"`
@@ -141,11 +142,12 @@ func predicateViews(predicates []lang.Predicate) []PredicateView {
 	for _, predicate := range predicates {
 		view := PredicateView{
 			Kind:      predicate.Kind,
+			Reference: predicate.Reference,
 			Field:     predicate.Field,
 			Operator:  predicate.Operator,
 			Providers: append([]string(nil), predicate.Providers...),
 		}
-		if predicate.Kind == PredicateNeed || predicate.Kind == PredicateBlock {
+		if (predicate.Kind == PredicateNeed || predicate.Kind == PredicateBlock) && predicate.Reference == "" {
 			view.Value = &ValueView{
 				Kind:   predicate.Value.Kind,
 				Bool:   predicate.Value.Bool,

@@ -109,6 +109,22 @@ mismatch between the fact's runtime value and the declared kind fails
 the check. Numbers compare numerically; `bool` and `string` support
 only `==`/`!=`.
 
+When the right operand is a numeric signal, both facts must be present,
+finite numbers and independently fresh at the evaluation clock. A missing
+operand yields `INSUFFICIENT_EVIDENCE`; an expired or unknown-age operand
+yields `EXPIRED`; a type mismatch or nonfinite operand yields `DENIED`.
+Checks run left to right, so a missing left operand is reported before a
+stale right operand. The trace records the right signal as `reference` and
+its resolved value as `expected`. That value is evidence, not a public
+threshold: consumers must apply their evidence-disclosure policy to it.
+
+CONTRL-115 adds this form without changing the canonical representation of
+existing literal comparisons. A reference comparison adds a `reference`
+field to its predicate and proof obligation; absent reference fields are
+not serialized. Existing source retains its compiled hash. Numeric values
+follow the existing float64 representation; this does not introduce exact
+decimal arithmetic or infer that different measurement units are comparable.
+
 ### need (temporal)
 
 The field must be a declared `time` signal; the fact must parse as a
