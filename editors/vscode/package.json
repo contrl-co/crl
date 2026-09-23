@@ -2,7 +2,7 @@
   "name": "crl-language-support",
   "displayName": "CRL (CONTRL Rule Language)",
   "description": "Syntax highlighting, snippets, editor configuration, and compiler-backed diagnostics for CRL.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "contrl",
   "main": "./extension.js",
   "engines": {

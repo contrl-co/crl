@@ -6,12 +6,13 @@
 # Environment:
 #   CRLC_VERSION      release tag to install (default: latest)
 #   CRLC_INSTALL_DIR  target directory (default: ~/.local/bin)
+#   CRLC_ALLOW_UNVERIFIED=1 permits checksum-only installation when cosign
+#                         is unavailable (default: fail closed)
 #
 # The script downloads the release archive and checksums.txt, verifies
-# the archive's SHA-256 against the checksums file, and — when cosign
-# is installed — verifies the checksums file's keyless signature before
-# trusting it. Without cosign it proceeds on the published SHA-256 alone
-# and says so; install cosign for the full chain.
+# the archive's SHA-256 against the checksums file and verifies the checksum
+# manifest's keyless signature before trusting it. A checksum-only fallback
+# requires the explicit CRLC_ALLOW_UNVERIFIED=1 emergency opt-out.
 
 set -eu
 
@@ -61,26 +62,17 @@ curl -fsSL -o "$workdir/$archive" "$base/$archive"
 curl -fsSL -o "$workdir/checksums.txt" "$base/checksums.txt"
 
 if command -v cosign >/dev/null 2>&1; then
-  curl -fsSL -o "$workdir/checksums.txt.sig" "$base/checksums.txt.sig"
-  curl -fsSL -o "$workdir/checksums.txt.pem" "$base/checksums.txt.pem"
-  echo "verifying checksums signature (GitHub Actions identity) ..."
-  if cosign verify-blob \
-    --certificate "$workdir/checksums.txt.pem" \
-    --signature "$workdir/checksums.txt.sig" \
-    --certificate-identity-regexp '^https://github\.com/contrl-co/crl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' \
-    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    "$workdir/checksums.txt" >/dev/null 2>&1; then
-    echo "verified GitHub Actions release identity"
-  else
-    # Releases migrated from GitLab retain their original, valid
-    # certificates. Permit that identity only for the three checksum
-    # manifests whose bytes were independently validated during migration.
-    checksums_digest=$(sha256_file "$workdir/checksums.txt")
-    case "$checksums_digest" in
+  # Historical artifacts keep their detached signatures. Select that path
+  # only by the migration-validated manifest bytes, never as a fallback for
+  # a missing or invalid modern bundle.
+  checksums_digest=$(sha256_file "$workdir/checksums.txt")
+  case "$checksums_digest" in
       0450e27bb1216f93d08d08e27cef1ecb7482cedf58e66fa4cba86c9ded60257a | \
       db7bd1dea94951cc210a9f70ee7ded3b47b48be0bd5aacfa701cf0534f0aeb5b | \
       bb86a92cea6f0f972cb24e637f0227215378193124732b62d0559c08b7eba369)
         echo "verifying checksum-pinned migrated release identity ..."
+        curl -fsSL -o "$workdir/checksums.txt.sig" "$base/checksums.txt.sig"
+        curl -fsSL -o "$workdir/checksums.txt.pem" "$base/checksums.txt.pem"
         cosign verify-blob \
           --certificate "$workdir/checksums.txt.pem" \
           --signature "$workdir/checksums.txt.sig" \
@@ -89,14 +81,26 @@ if command -v cosign >/dev/null 2>&1; then
           "$workdir/checksums.txt" >/dev/null
         ;;
       *)
-        echo "install.sh: release signature is not from the CRL GitHub workflow" >&2
-        exit 1
+        curl -fsSL -o "$workdir/checksums.txt.sigstore.json" "$base/checksums.txt.sigstore.json"
+        echo "verifying checksums bundle (GitHub Actions identity) ..."
+        if ! cosign verify-blob \
+          --bundle "$workdir/checksums.txt.sigstore.json" \
+          --certificate-identity-regexp '^https://github\.com/contrl-co/crl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' \
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+          "$workdir/checksums.txt" >/dev/null 2>&1; then
+          echo "install.sh: release signature is not from the CRL GitHub workflow" >&2
+          exit 1
+        fi
+        echo "verified GitHub Actions release identity"
         ;;
-    esac
-  fi
+  esac
 else
-  echo "note: cosign not found; verifying SHA-256 only." >&2
-  echo "      install cosign to verify the release signature as well." >&2
+  if [ "${CRLC_ALLOW_UNVERIFIED:-0}" != 1 ]; then
+    echo "install.sh: cosign is required to verify CRL release provenance" >&2
+    echo "install cosign, or explicitly set CRLC_ALLOW_UNVERIFIED=1 for checksum-only recovery" >&2
+    exit 1
+  fi
+  echo "warning: CRLC_ALLOW_UNVERIFIED=1; verifying SHA-256 without signer identity" >&2
 fi
 
 echo "verifying SHA-256 ..."

@@ -263,6 +263,7 @@ indented (unlike rules, cluster bodies get no top-level carve-out).
 
 ```text
 need <field> <op> <literal>
+need <numeric-signal> <op> <numeric-signal>
 ```
 
 `<op>` is one of `==`, `!=`, `>`, `>=`, `<`, `<=`. Numbers support all
@@ -270,6 +271,12 @@ six; `bool` and `string` fields support only `==` and `!=`. The field
 must resolve to a declared signal (or other visible subject — see
 [semantics.md](semantics.md#what-a-predicate-may-reference)); the
 literal's type must match the field's kind.
+
+An unquoted right-hand identifier compares two declared numeric signals.
+Both must have kind `number`; a rule, collector, cluster, or host-derived
+fact cannot stand in for either signal. Each operand keeps its own expiry.
+This supports comparisons such as `need received >= shipped`, not arithmetic
+expressions, aggregation, or unit conversion. Quoted strings remain literals.
 
 #### need — temporal forms
 
@@ -377,6 +384,7 @@ cluster_rules    = "rules", identifier, ("+", identifier)*
 
 predicate        = need | block | quorum
 need             = "need", identifier, comparison_op, literal
+                 | "need", identifier, comparison_op, identifier
                  | "need", identifier, ("before" | "after"), temporal_ref
                  | "need", identifier, "within", duration,
                    ("before" | "after"), temporal_ref

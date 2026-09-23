@@ -25,6 +25,12 @@ if [ -z "$impl" ]; then
     echo "tests-only change; nothing to pin"
     exit 0
 fi
+# Implementation files the PR adds do not exist in the base, and
+# `git checkout BASE -- ...` below can only restore files the base has,
+# so it leaves them in place. A whole new package's tests would then run
+# against the very implementation they arrived with and pass — exactly
+# the vacuous case this gate exists to catch. Remove them explicitly.
+added_impl=$(git diff --name-only --diff-filter=A "$BASE"..HEAD -- '*.go' ':(exclude)*_test.go')
 echo "new test files:"
 echo "$added"
 
@@ -35,6 +41,12 @@ cd "$worktree"
 # Base implementation + the PR's tests. A compile failure counts as
 # pinning: the tests reference symbols the fix introduces.
 git checkout -q "$BASE" -- '*.go' ':(exclude)*_test.go'
+if [ -n "$added_impl" ]; then
+    printf '%s\n' "$added_impl" | while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        rm -f "$file"
+    done
+fi
 if go test ./... -count=1 >test-output.log 2>&1; then
     echo "FAIL: the full suite is green with the BASE implementation and"
     echo "this PR's tests. The new test files above pin no behavior"

@@ -32,13 +32,24 @@ stable `CRL###` codes — see [diagnostics.md](diagnostics.md).
 ## crlc compile
 
 ```text
-crlc compile [-edition v1] [-format text|json] [path]
+crlc compile [-edition v1] [-format text|json|proto] [path]
 ```
 
 Compiles one source and prints its canonical text followed by a
 trailing `# sha256:<hash>` line — the whole output is itself valid,
 lintable CRL. `-format json` emits
-`{ok, edition, source_hash, canonical_text, hash}` instead.
+`{ok, edition, source_hash, canonical_text, hash, metadata_version, program}`
+instead. Metadata version `1` exposes the same logical `ProgramView` as
+`compiled.Program()`: rules, collectors, typed signals, and predicates.
+Signal `freshness` contains either `mode: "ttl"` with normalized `seconds`,
+or `mode: "at"` with an RFC3339 `at` timestamp. Numeric literals include
+`number` even when zero; signal comparisons carry `reference` instead of
+a literal. Consumers can inspect this metadata without parsing CRL.
+
+`-format proto` writes the binary `CompiledBundle` envelope defined in
+`proto/contrl/crl/v1/envelope.proto`. Its hash identifies the original
+canonical bundle bytes, not the Protobuf serialization. Logical metadata
+does not change those bytes, canonical text, or bundle hashes.
 
 `-edition` pins the edition (default and currently only: `v1`);
 requesting an unimplemented edition fails the compile.

@@ -119,17 +119,17 @@ func EvaluateBundleAt(compiled CompiledBundle, facts Facts, now time.Time) Bundl
 	var globalChecks []Check
 	var checks []Check
 
-	// The bundle-wide signal index is used for EVERY scope. The
+	// The bundle-wide evidence index is used for EVERY scope. The
 	// compiler validates rule predicates against the bundle-wide signal
 	// set (a rule may reference a signal declared in another rule's
 	// collector), so rule evaluation must resolve expiry against the
 	// same set — a rule-local index would miss cross-rule references
 	// and silently skip the freshness check (fail open).
-	allSignals := bundleSignalIndex(compiled.Program)
+	evidence := bundleEvidenceIndex(compiled.Program)
 
 	ruleByName := make(map[string]RuleTrace, len(compiled.Program.Rules))
 	for _, rule := range compiled.Program.Rules {
-		trace := evaluateBundleRule(rule, working, allSignals, now)
+		trace := evaluateBundleRule(rule, working, evidence, now)
 		ruleTraces = append(ruleTraces, trace)
 		ruleByName[trace.RuleName] = trace
 		working[trace.RuleName] = trace.Authorized
@@ -138,7 +138,7 @@ func EvaluateBundleAt(compiled CompiledBundle, facts Facts, now time.Time) Bundl
 	}
 
 	for _, cluster := range compiled.Program.Clusters {
-		trace := evaluateBundleCluster(cluster, working, allSignals, now, ruleByName)
+		trace := evaluateBundleCluster(cluster, working, evidence, now, ruleByName)
 		clusterTraces = append(clusterTraces, trace)
 		working[trace.ClusterName] = trace.Authorized
 		working["cluster."+trace.ClusterName] = trace.Authorized
@@ -146,7 +146,7 @@ func EvaluateBundleAt(compiled CompiledBundle, facts Facts, now time.Time) Bundl
 	}
 
 	for _, predicate := range compiled.Program.Predicates {
-		check := evaluatePredicate(predicate, working, allSignals, now)
+		check := evaluatePredicate(predicate, working, evidence, now)
 		check.Scope = "global"
 		globalChecks = append(globalChecks, check)
 		checks = append(checks, check)
@@ -316,6 +316,18 @@ func normalizeCluster(cluster Cluster, ruleNames map[string]string) (Cluster, er
 }
 
 func validateBundlePredicate(predicate Predicate, signalKinds map[string]string, collectorNames map[string]struct{}, ruleNames map[string]string, clusterNames map[string]string) error {
+	if predicate.Reference != "" {
+		for _, name := range []string{predicate.Field, predicate.Reference} {
+			kind, declared := signalKinds[name]
+			if !declared {
+				return fmt.Errorf("%w: %s", ErrMissingSignal, name)
+			}
+			if kind != "number" {
+				return fmt.Errorf("%w: comparison requires numeric signal %s", ErrTypeMismatch, name)
+			}
+		}
+		return nil
+	}
 	kindForField := func(field string) (string, bool) {
 		if kind, ok := kernelDerivedKind(field); ok {
 			return kind, true
@@ -375,11 +387,11 @@ func validateBundlePredicate(predicate Predicate, signalKinds map[string]string,
 	return nil
 }
 
-func evaluateBundleRule(rule Rule, facts Facts, signals map[string]Signal, now time.Time) RuleTrace {
+func evaluateBundleRule(rule Rule, facts Facts, index evidenceIndex, now time.Time) RuleTrace {
 	checks := make([]Check, 0, len(rule.Predicates))
 	authorized := true
 	for _, predicate := range rule.Predicates {
-		check := evaluatePredicate(predicate, facts, signals, now)
+		check := evaluatePredicate(predicate, facts, index, now)
 		check.RuleName = rule.Name
 		check.Scope = "rule"
 		if !check.Passed {
@@ -396,7 +408,7 @@ func evaluateBundleRule(rule Rule, facts Facts, signals map[string]Signal, now t
 	}
 }
 
-func evaluateBundleCluster(cluster Cluster, facts Facts, signals map[string]Signal, now time.Time, ruleByName map[string]RuleTrace) ClusterTrace {
+func evaluateBundleCluster(cluster Cluster, facts Facts, index evidenceIndex, now time.Time, ruleByName map[string]RuleTrace) ClusterTrace {
 	members := make([]ClusterMember, 0, len(cluster.Rules))
 	authorized := true
 	for _, ruleName := range cluster.Rules {
@@ -412,7 +424,7 @@ func evaluateBundleCluster(cluster Cluster, facts Facts, signals map[string]Sign
 	}
 	checks := make([]Check, 0, len(cluster.Predicates))
 	for _, predicate := range cluster.Predicates {
-		check := evaluatePredicate(predicate, facts, signals, now)
+		check := evaluatePredicate(predicate, facts, index, now)
 		check.ClusterName = cluster.Name
 		check.Scope = "cluster"
 		if !check.Passed {
@@ -532,6 +544,19 @@ func bundleSignalIndex(bundle Bundle) map[string]Signal {
 	return out
 }
 
+// bundleEvidenceIndex indexes every declared signal by its own name and
+// by the collector that declares it, so evaluation can resolve the
+// freshness of a quorum subject named either way.
+func bundleEvidenceIndex(bundle Bundle) evidenceIndex {
+	collectors := make(map[string][]Signal)
+	for _, rule := range bundle.Rules {
+		for _, collector := range rule.Collectors {
+			collectors[collector.Name] = append(collectors[collector.Name], collector.Signals...)
+		}
+	}
+	return evidenceIndex{signals: bundleSignalIndex(bundle), collectors: collectors}
+}
+
 // Facts fold to NFC here because normalizeBundle folded the rule side; a
 // comparison against raw bytes would answer on spelling, not on evidence.
 func copyFacts(facts Facts) Facts {
@@ -597,7 +622,11 @@ func canonicalBundleText(bundle Bundle) string {
 func writePredicate(b *strings.Builder, prefix string, predicate Predicate) {
 	switch predicate.Kind {
 	case PredicateNeed:
-		fmt.Fprintf(b, "%sneed %s %s %s\n", prefix, predicate.Field, predicate.Operator, renderValue(predicate.Value))
+		right := renderValue(predicate.Value)
+		if predicate.Reference != "" {
+			right = predicate.Reference
+		}
+		fmt.Fprintf(b, "%sneed %s %s %s\n", prefix, predicate.Field, predicate.Operator, right)
 	case PredicateBlock:
 		fmt.Fprintf(b, "%sblock %s\n", prefix, predicate.Field)
 	case PredicateQuorum:

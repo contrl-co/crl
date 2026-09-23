@@ -7,7 +7,7 @@
 "**CRL**" (in the context of rule languages), "**CONTRL**",
 "**CONTRL Rule Language**", the "**crlc**" tool name, and any
 associated logos are trademarks of the CONTRL group. The code and
-specification in this repository are licensed under AGPL-3.0; that
+specification in this repository are licensed under AGPL-3.0-only; that
 license grants copyright and patent rights, **not** trademark rights
 — it contains no trademark grant, and AGPL-3.0 §7(e) expressly
 contemplates declining to grant rights in trade names and marks.

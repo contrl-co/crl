@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package contrl.crl.v1;
+
+option go_package = "github.com/contrl-co/crl/proto/contrl/crl/v1;crlv1";
+
+// CompiledBundle carries a compiled CRL bundle between systems.
+//
+// It is a transport envelope and nothing more. It is never hashed, and
+// it must never be re-serialized and hashed: protobuf does not
+// guarantee deterministic encoding across implementations, versions, or
+// languages, so a hash taken over these bytes would not be reproducible
+// and CRL's content addressing would stop meaning anything.
+//
+// The bundle's content address is `hash`, taken over `canonical_bundle`
+// exactly as those bytes appear on the wire. A consumer verifies a
+// bundle with SHA-256 alone:
+//
+//     sha256(canonical_bundle) == hash
+//
+// That check needs no parser, no compiler, and no second serializer,
+// which is what lets a registry accept a compiled bundle it has no
+// ability to compile for itself.
+//
+// Treat `canonical_bundle` as opaque. Decoding it to a structure and
+// re-encoding it will not reproduce `hash`.
+message CompiledBundle {
+  // Edition the bundle was compiled under. Currently always "v1".
+  string edition = 1;
+  // SHA-256, hex, of the raw source bytes as submitted. Carried so a
+  // publisher can prove which source produced this bundle without the
+  // source itself travelling.
+  string source_hash = 2;
+  // The normalized rendering of the bundle. Re-compiles to itself and
+  // to the same hash.
+  string canonical_text = 3;
+  // The exact bytes `hash` is taken over.
+  bytes canonical_bundle = 4;
+  // SHA-256, hex, of canonical_bundle. The bundle's content address.
+  string hash = 5;
+}

@@ -337,11 +337,15 @@ rule r
     need sa == true
     quorum 2 of 2 a b
 `, Options{})
-	if !report.OK {
-		t.Fatalf("report.OK = false, diagnostics = %#v", report.Diagnostics)
+	if report.OK {
+		t.Fatalf("report.OK = true, diagnostics = %#v", report.Diagnostics)
 	}
-	if !hasDiagnostic(report, "CRL211", SeverityWarning) {
-		t.Fatalf("expected CRL211 for two collectors sharing a source, got %#v", report.Diagnostics)
+	diagnostic, ok := diagnosticByCode(report, "CRL121", SeverityError)
+	if !ok {
+		t.Fatalf("expected CRL121 compile error, got %#v", report.Diagnostics)
+	}
+	if diagnostic.Line != 12 || diagnostic.Column != 5 {
+		t.Fatalf("diagnostic span = %d:%d, want 12:5", diagnostic.Line, diagnostic.Column)
 	}
 }
 
@@ -359,8 +363,8 @@ rule r
     need sa == true
     quorum a & b
 `, Options{})
-	if !hasDiagnostic(report, "CRL211", SeverityWarning) {
-		t.Fatalf("expected CRL211 for a boolean quorum over one source, got %#v", report.Diagnostics)
+	if !hasDiagnostic(report, "CRL121", SeverityError) {
+		t.Fatalf("expected CRL121 compile error, got %#v", report.Diagnostics)
 	}
 }
 
@@ -378,7 +382,7 @@ rule r
     need sa == true
     quorum 2 of 2 a b
 `, Options{})
-	if hasDiagnostic(report, "CRL211", SeverityWarning) {
-		t.Fatalf("did not expect CRL211 for distinct sources, got %#v", report.Diagnostics)
+	if !report.OK {
+		t.Fatalf("distinct sources should lint cleanly, got %#v", report.Diagnostics)
 	}
 }

@@ -105,6 +105,45 @@ jobs:
       - run: go run ./cmd/crlc lint examples/
       - run: go run ./cmd/crlc eval -facts examples/facts/permit_quorum_2of3.authorized.json -at 2026-06-02T00:00:00Z -require-authorized examples/permit_quorum_2of3.crl
 
+  # The installer must fail closed: no cosign refuses, the explicit
+  # CRLC_ALLOW_UNVERIFIED=1 opt-out is checksum-only recovery with a
+  # warning, and an observed cosign rejection is never bypassable.
+  install-script:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sh scripts/ci/test-install-script.sh
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.21.1
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+      - run: node scripts/ci/test-release-signing.cjs
+  # The browser build of the toolchain. It has to do three things, and
+  # each is checked here: link nothing but the language (whatever it
+  # links is served to every visitor and decompiles), instantiate in a
+  # real JS host, and produce the same hashes crlc produces — a browser
+  # compiler that disagrees with the CLI would be worse than none.
+  wasm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # No package.json here: the smoke harness is plain Node with
+          # no dependencies, so there is nothing to cache.
+          node-version: 22.21.1
+      - run: sh scripts/build-wasm.sh
+      - name: Dependency and artifact surface
+        run: sh scripts/ci/check-wasm-deps.sh
+      - name: Load and evaluate in a JS host
+        run: node scripts/ci/wasm-smoke.cjs
+
   # A compiler change that moves hashes of unchanged source must carry a
   # "hashes moved" CHANGELOG entry (spec/editions.md).
   hash-disclosure:
@@ -200,6 +239,32 @@ jobs:
           anchore/grype:v0.116.1@sha256:1e71065c0a4cff3e6bd3b8add525ffac4343eb4971694eb90a31cf6d4d3e85db
           dir:/src --fail-on high
 
+  # Allocation ceilings run in the required Go suite. Wall-clock and peak
+  # memory measurements stay informational because hosted-runner contention
+  # is not stable enough for a merge gate. Capture them on each develop head
+  # so regressions can be compared on the same runner class.
+  performance-report:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Capture performance report
+        env:
+          BENCH_COUNT: "10"
+        run: ./scripts/performance-baseline.sh > performance-baseline.txt 2>&1
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crl-performance-${{ github.sha }}
+          path: performance-baseline.txt
+          if-no-files-found: error
+          retention-days: 30
+
   # The explicit name makes the check run report as "ci / gate", the exact
   # string the ruleset requires; a plain job would report as bare "gate".
   # Event-specific jobs may be skipped only on events where their job-level
@@ -213,12 +278,15 @@ jobs:
       - go
       - docs-lint
       - examples-lint
+      - install-script
+      - wasm
       - hash-disclosure
       - new-tests-pin
       - golden-arm64
       - vscode-extension
       - trivy
       - grype
+      - performance-report
     steps:
       - name: Require every dependency
         env:
@@ -226,12 +294,15 @@ jobs:
           GO_RESULT: ${{ needs.go.result }}
           DOCS_LINT_RESULT: ${{ needs.docs-lint.result }}
           EXAMPLES_LINT_RESULT: ${{ needs.examples-lint.result }}
+          INSTALL_SCRIPT_RESULT: ${{ needs.install-script.result }}
+          WASM_RESULT: ${{ needs.wasm.result }}
           HASH_DISCLOSURE_RESULT: ${{ needs.hash-disclosure.result }}
           NEW_TESTS_PIN_RESULT: ${{ needs.new-tests-pin.result }}
           GOLDEN_ARM64_RESULT: ${{ needs.golden-arm64.result }}
           VSCODE_EXTENSION_RESULT: ${{ needs.vscode-extension.result }}
           TRIVY_RESULT: ${{ needs.trivy.result }}
           GRYPE_RESULT: ${{ needs.grype.result }}
+          PERFORMANCE_REPORT_RESULT: ${{ needs.performance-report.result }}
         run: |
           set -eu
 
@@ -248,6 +319,8 @@ jobs:
           require_result go "$GO_RESULT" success
           require_result docs-lint "$DOCS_LINT_RESULT" success
           require_result examples-lint "$EXAMPLES_LINT_RESULT" success
+          require_result install-script "$INSTALL_SCRIPT_RESULT" success
+          require_result wasm "$WASM_RESULT" success
           require_result golden-arm64 "$GOLDEN_ARM64_RESULT" success
           require_result vscode-extension "$VSCODE_EXTENSION_RESULT" success
 
@@ -262,7 +335,9 @@ jobs:
           if [ "$EVENT_NAME" = push ]; then
             require_result trivy "$TRIVY_RESULT" skipped
             require_result grype "$GRYPE_RESULT" skipped
+            require_result performance-report "$PERFORMANCE_REPORT_RESULT" success
           else
             require_result trivy "$TRIVY_RESULT" success
             require_result grype "$GRYPE_RESULT" success
+            require_result performance-report "$PERFORMANCE_REPORT_RESULT" skipped
           fi
