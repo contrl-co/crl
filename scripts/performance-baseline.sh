@@ -23,7 +23,7 @@ echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "system=$(uname -smr)"
 echo "toolchain=$(go version)"
 go env GOOS GOARCH CGO_ENABLED
-if command -v sysctl >/dev/null 2>&1; then
+if [ "$(uname -s)" = Darwin ] && command -v sysctl >/dev/null 2>&1; then
 	echo "cpu=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
 	echo "logical_cpus=$(sysctl -n hw.ncpu 2>/dev/null || true)"
 	echo "memory_bytes=$(sysctl -n hw.memsize 2>/dev/null || true)"

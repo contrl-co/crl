@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -66,6 +67,23 @@ func assertAllocationBudget(t *testing.T, name string, limit float64, operation 
 	got := testing.AllocsPerRun(10, operation)
 	if got > limit {
 		t.Errorf("%s allocations = %.0f, budget %.0f", name, got, limit)
+	}
+}
+
+func TestBenchmarkSourceMetrics(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := exec.Command(executable,
+		"-test.run=^$", "-test.bench=^Benchmark(Compile|Lint)$",
+		"-test.benchtime=1x", "-test.count=1",
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("benchmarks failed: %v\n%s", err, output)
+	}
+	if got := strings.Count(string(output), " source-B"); got != 4 {
+		t.Fatalf("source-B metrics = %d, want 4 (compile/lint, representative/40 rules)\n%s", got, output)
 	}
 }
 
@@ -171,8 +189,9 @@ func benchmarkSources(b *testing.B, benchmark func(*testing.B, string)) {
 		{name: "rules=40", source: largeBenchmarkSource(40)},
 	} {
 		b.Run(workload.name, func(b *testing.B) {
-			b.ReportMetric(float64(len(workload.source)), "source-B")
 			benchmark(b, workload.source)
+			// The first b.Loop call resets custom metrics.
+			b.ReportMetric(float64(len(workload.source)), "source-B")
 		})
 	}
 }
