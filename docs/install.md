@@ -9,13 +9,14 @@ CycloneDX SBOM, and keyless cosign signatures.
 
 Verification is part of installation, not an optional extra — an
 unverified binary is a bypass of everything CRL's determinism buys.
-Every release publishes `checksums.txt` with a cosign signature and
-certificate. To verify a download:
+New releases publish `checksums.txt` and `checksums.txt.sigstore.json`, a
+Sigstore bundle containing the signature, certificate, and transparency-log
+verification material. Use cosign 3.1.2 (the release pipeline's pinned version)
+to verify a download:
 
 ```sh
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp '^https://github\.com/contrl-co/crl/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
@@ -26,8 +27,9 @@ The `0.1.0-beta04`, `0.1.0-beta05`, and `0.1.0` releases were signed by
 the original GitLab pipeline before their artifacts were copied byte for
 byte to GitHub. The install script accepts that historical identity only
 when `checksums.txt` matches one of those three migration-validated
-manifests. Every later release must match the GitHub Actions identity
-shown above.
+manifests. Those releases retain `checksums.txt.sig` and `checksums.txt.pem`;
+all other manifests require the modern bundle and GitHub Actions identity
+shown above. A missing or rejected bundle never falls back to GitLab trust.
 
 ## Homebrew (macOS / Linux)
 
