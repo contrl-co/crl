@@ -9,8 +9,22 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
+- Numeric signal-to-signal comparisons, such as `need received >= shipped`,
+  with freshness checks on both operands and fail-closed behavior for missing
+  or stale evidence. This is comparison support, not arithmetic expressions,
+  aggregation, or unit conversion; see [spec/semantics.md](spec/semantics.md).
+- `crlc compile -format json` metadata version `1`: typed signals, normalized
+  freshness, numeric literals including zero, and explicit predicate
+  `reference` fields. Consumers can inspect the program without parsing CRL.
+- `crlc compile -format proto` and `Compiled.CanonicalBundle()` expose the
+  compiled envelope and original canonical bundle bytes. The bundle hash
+  identifies those canonical bytes, not the Protobuf encoding; see
+  [docs/crlc.md](docs/crlc.md) and
+  [proto/contrl/crl/v1/envelope.proto](proto/contrl/crl/v1/envelope.proto).
 - A browser build of the toolchain: `cmd/crl-wasm` compiles CRL, lints
   it, projects its graph, and evaluates it against facts inside a web
   page, with no server and no source leaving the tab. Build it with
@@ -28,16 +42,6 @@ weekly; the v1 edition's compilation contract does not change (see
 - The pinned Go toolchain is updated to 1.25.12 to fix the reachable
   standard-library vulnerability GO-2026-4602, and `golang.org/x/text`
   is updated to 0.39.0 to fix CVE-2026-56852 in Unicode normalization.
-- Compilation is now collision-safe against Unicode and invalid-UTF-8
-  attacks: strings are folded to NFC in the compiler (the layer that
-  also compares them, not the hasher), and invalid UTF-8 is rejected in
-  source text, escaped literals, and the struct API. Previously two
-  byte-distinct programs could share a bundle hash while evaluating to
-  opposite decisions.
-- Quorum evaluation is three-valued (Kleene): a missing subject is
-  *unknown*, so a negated absent subject (`not <absent>`) can no longer
-  read as a clearance. A stale subject is unknown too — it can neither
-  carry a branch nor read as cleared under negation.
 - **Quorum thresholds now enforce freshness.** A quorum subject that
   names a collector is judged on the signals that collector declares;
   previously only a subject that named a signal was checked, and a
@@ -52,15 +56,14 @@ weekly; the v1 edition's compilation contract does not change (see
   subjects would reach the threshold, and `INSUFFICIENT_EVIDENCE` when
   the threshold is out of reach on the evidence present. Bundle hashes
   are unaffected — this changes evaluation, not compilation.
-- Evaluation fails closed in more places: a stale, future-dated, or
-  unprovable observation is `EXPIRED`; a zero-value or round-tripped
-  compiled bundle no longer authorizes; an empty program authorizes
-  nothing.
-- Release provenance: the cosign identity is pinned in verification, so
-  a keyless signature from an unrelated identity cannot pass.
 
 ### Changed
 
+- Language edition remains `v1`; existing canonical output and golden
+  hashes are unchanged. Evaluation corrections are described above.
+- Compile and evaluation allocation reductions, with reproducible performance
+  baselines documented in [docs/performance.md](docs/performance.md).
+- The VS Code extension version is aligned with the 0.2.0 toolchain release.
 - The license is declared AGPL-3.0-only in every declaration in this
   repository. The LICENSE grant notice named no version, which under AGPL
   section 14 lets recipients pick any published version, while the release
@@ -77,6 +80,36 @@ weekly; the v1 edition's compilation contract does not change (see
   their original keyless signing identity and are accepted only through
   checksum-pinned compatibility rules; new releases use the GitHub
   Actions workload identity.
+
+### Fixed
+
+- Same-source collectors can no longer count as independent quorum members.
+  The compiler rejects them with `CRL121`; hashes of accepted programs are
+  unchanged.
+
+## [0.1.0]
+
+### Security
+
+- Compilation is now collision-safe against Unicode and invalid-UTF-8
+  attacks: strings are folded to NFC in the compiler (the layer that
+  also compares them, not the hasher), and invalid UTF-8 is rejected in
+  source text, escaped literals, and the struct API. Previously two
+  byte-distinct programs could share a bundle hash while evaluating to
+  opposite decisions.
+- Quorum evaluation is three-valued (Kleene): a missing subject is
+  *unknown*, so a negated absent subject (`not <absent>`) can no longer
+  read as a clearance. Freshness taints a whole quorum: a stale subject
+  fails the check as expired regardless of boolean structure.
+- Evaluation fails closed in more places: a stale, future-dated, or
+  unprovable observation is `EXPIRED`; a zero-value or round-tripped
+  compiled bundle no longer authorizes; an empty program authorizes
+  nothing.
+- Release provenance: the cosign identity is pinned in verification, so
+  a keyless signature from an unrelated identity cannot pass.
+
+### Changed
+
 - **Bundle hashes moved for bundles containing `<`/`>` comparisons.**
   The canonical JSON encoder no longer HTML-escapes `<`, `>`, and `&`,
   so the operator `>=` is hashed as `>=` rather than `>=`. This is
@@ -100,9 +133,6 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Fixed
 
-- Same-source collectors can no longer count as independent quorum members.
-  The compiler rejects them with `CRL121`; hashes of accepted programs are
-  unchanged.
 - Newly rejected (each could previously produce a misleading or unsafe
   bundle): duplicate `target`, `package`, `bundle`, and cluster `rules`
   statements; a `count()` threshold above the subject count; a
