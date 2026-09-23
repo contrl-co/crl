@@ -129,6 +129,8 @@ jobs:
           go vet ./...
           go test ./... -count=1
           go run ./cmd/crlc lint examples/
+          sh scripts/ci/test-install-script.sh
+          node scripts/ci/test-release-signing.cjs
       - name: Publish signed release artifacts and Homebrew formula
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:

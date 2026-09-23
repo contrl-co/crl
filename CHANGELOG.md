@@ -21,6 +21,10 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Security
 
+- New releases sign `checksums.txt` as a Sigstore bundle compatible with the
+  pinned cosign 3.1.2. Installation requires that bundle's GitHub Actions
+  identity; detached GitLab signatures remain accepted only for the three
+  checksum-pinned migrated manifests.
 - The pinned Go toolchain is updated to 1.25.12 to fix the reachable
   standard-library vulnerability GO-2026-4602, and `golang.org/x/text`
   is updated to 0.39.0 to fix CVE-2026-56852 in Unicode normalization.
