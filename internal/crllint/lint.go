@@ -223,6 +223,7 @@ func addUnreferencedSignalDiagnostics(document crl.Document, add *func(Diagnosti
 	}
 	markPredicate := func(predicate crl.Predicate) {
 		mark(predicate.Field)
+		mark(predicate.Reference)
 		for _, provider := range predicate.Providers {
 			mark(provider)
 		}

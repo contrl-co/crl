@@ -55,6 +55,7 @@ type IRCluster struct {
 
 type ProofObligation struct {
 	ID         string              `json:"id"`
+	Reference  string              `json:"reference,omitempty"`
 	Kind       ProofKind           `json:"kind"`
 	Scope      string              `json:"scope"`
 	Owner      string              `json:"owner,omitempty"`
@@ -124,12 +125,13 @@ func lowerPredicates(scope, owner string, predicates []Predicate) []ProofObligat
 	out := make([]ProofObligation, 0, len(predicates))
 	for i, predicate := range predicates {
 		obligation := ProofObligation{
-			ID:       proofID(scope, owner, i),
-			Scope:    scope,
-			Owner:    owner,
-			Field:    predicate.Field,
-			Operator: predicate.Operator,
-			Value:    predicate.Value,
+			ID:        proofID(scope, owner, i),
+			Reference: predicate.Reference,
+			Scope:     scope,
+			Owner:     owner,
+			Field:     predicate.Field,
+			Operator:  predicate.Operator,
+			Value:     predicate.Value,
 		}
 		switch predicate.Kind {
 		case PredicateNeed:

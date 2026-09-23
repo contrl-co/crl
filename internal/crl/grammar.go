@@ -102,6 +102,9 @@ func parseNeed(field, op, rawValue string) (Predicate, error) {
 	}
 	value, err := parseValue(rawValue)
 	if err != nil {
+		if identifierPattern.MatchString(strings.TrimSpace(rawValue)) {
+			return normalizePredicate(Predicate{Kind: PredicateNeed, Field: field, Operator: op, Reference: rawValue, Value: Value{Kind: "number"}})
+		}
 		return Predicate{}, err
 	}
 	return normalizePredicate(Predicate{Kind: PredicateNeed, Field: field, Operator: op, Value: value})

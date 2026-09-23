@@ -96,6 +96,28 @@ async function main() {
     if (native.canonical_text !== compiled.canonical_text) fail("canonical text differs between crlc and the wasm build");
     console.log("agree    crlc and crl.wasm produce identical canonical text and hash");
 
+    const comparison = "crl v1\nrule receipt\ntarget delivery\n" +
+        "collector warehouse source api from warehouse.receipts\n" +
+        "signal shipped number from shipped ttl 1d\n" +
+        "signal received number from received ttl 1d\nneed received >= shipped\n";
+    const compared = call("contrlCompileCRL", { source: comparison });
+    const nativeComparison = JSON.parse(execFileSync("go", ["run", "./cmd/crlc", "compile", "-format", "json"], {
+        cwd: repo, input: comparison, encoding: "utf8",
+    }));
+    if (compared.hash !== nativeComparison.hash) fail("comparison hash differs between native and wasm");
+    for (const [received, observed, want] of [
+        [99, "2026-09-22T00:00:00Z", "DENIED"],
+        [100, "2026-09-22T00:00:00Z", "AUTHORIZED"],
+        [100, "2026-09-20T00:00:00Z", "EXPIRED"],
+        [100, null, "EXPIRED"],
+    ]) {
+        const verdict = call("contrlEvaluateCRL", { source: comparison, now: "2026-09-22T12:00:00Z", facts: {
+            received, shipped: 100, "observed_at.received": "2026-09-22T00:00:00Z", "observed_at.shipped": observed,
+        } });
+        if (verdict.result !== want || verdict.checks[0].reference !== "shipped") fail(`comparison: wanted ${want}`);
+    }
+    console.log("compare  numeric signals: denied, authorized, stale, and unknown-age checks pass");
+
     const expectations = [
         ["permit_quorum_2of3.authorized.json", "AUTHORIZED", true],
         ["permit_quorum_2of3.blocked.json", "BLOCKED", false],

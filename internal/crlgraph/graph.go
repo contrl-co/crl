@@ -179,6 +179,11 @@ func (b *builder) addPredicate(id, parent, scope string, p crl.Predicate) {
 		if target, ok := b.resolveField(scope, p.Field); ok {
 			b.addEdge(id, target, EdgeReference)
 		}
+		if p.Reference != "" {
+			if target, ok := b.resolveField(scope, p.Reference); ok {
+				b.addEdge(id, target, EdgeReference)
+			}
+		}
 	case crl.PredicateQuorum:
 		subjects := p.Providers
 		if p.Expression != nil {
@@ -257,7 +262,11 @@ func predicateID(scope, owner string, index int) string {
 func predicateLabel(p crl.Predicate) string {
 	switch p.Kind {
 	case crl.PredicateNeed:
-		return fmt.Sprintf("need %s %s %s", p.Field, p.Operator, renderValue(p.Value))
+		right := renderValue(p.Value)
+		if p.Reference != "" {
+			right = p.Reference
+		}
+		return fmt.Sprintf("need %s %s %s", p.Field, p.Operator, right)
 	case crl.PredicateBlock:
 		return "block " + p.Field
 	case crl.PredicateQuorum:
