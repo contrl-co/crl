@@ -47,6 +47,7 @@ type ClusterMember struct {
 // observed, whether it passed, and — when it did not — why.
 type Check struct {
 	Kind              string             `json:"kind"`
+	Reference         string             `json:"reference,omitempty"`
 	Rule              string             `json:"rule_name,omitempty"`
 	Cluster           string             `json:"cluster_name,omitempty"`
 	Scope             string             `json:"scope,omitempty"`
@@ -130,6 +131,7 @@ func newChecks(in []lang.Check) []Check {
 	for _, check := range in {
 		out = append(out, Check{
 			Kind:              check.Kind,
+			Reference:         check.Reference,
 			Rule:              check.RuleName,
 			Cluster:           check.ClusterName,
 			Scope:             check.Scope,

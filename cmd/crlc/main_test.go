@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	crl "github.com/contrl-co/crl"
+	"github.com/contrl-co/crl/internal/crlwasm"
 )
 
 const goodSource = `crl v1
@@ -152,6 +156,77 @@ func TestCompileJSONDeterminism(t *testing.T) {
 	}
 	if a.Hash == "" || a.Hash != b.Hash || a.CanonicalText != b.CanonicalText {
 		t.Fatalf("comment changed compile output: %q vs %q", a.Hash, b.Hash)
+	}
+}
+
+func TestCompileJSONMetadata(t *testing.T) {
+	const source = `crl v1
+rule receipt
+target delivery
+collector warehouse source api from /receipts.json
+signal received number from warehouse.received unit kg ttl 90m
+signal shipped number from warehouse.shipped unit kg expires "2026-12-31T00:00:00Z"
+need received >= shipped
+need received >= 0
+`
+	code, stdout, stderr := runCLI(t, source, "compile", "-format", "json")
+	if code != 0 {
+		t.Fatalf("compile: exit %d, %s", code, stderr)
+	}
+	var got struct {
+		MetadataVersion int              `json:"metadata_version"`
+		Program         *crl.ProgramView `json:"program"`
+		Hash            string           `json:"hash"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.MetadataVersion != 1 || got.Program == nil {
+		t.Fatalf("missing versioned compiler metadata: %s", stdout)
+	}
+	compiled, err := crl.Compile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const originalHash = "b33c3ac4bea6dce8dbf39e902acf1be8fe5b479693ffdc26319edb1bb58382b7"
+	if got.Hash != originalHash || got.Hash != compiled.Hash || !reflect.DeepEqual(*got.Program, compiled.Program()) {
+		t.Fatal("CLI metadata differs from the compiled program")
+	}
+	rule := got.Program.Rules[0]
+	signals := map[string]crl.SignalView{}
+	for _, signal := range rule.Collectors[0].Signals {
+		signals[signal.Name] = signal
+	}
+	for _, name := range []string{"received", "shipped"} {
+		if signal := signals[name]; signal.Kind != "number" || signal.Unit != "kg" || signal.SourceField != "warehouse."+name {
+			t.Fatalf("missing typed operand %s: %+v", name, signal)
+		}
+	}
+	found := false
+	for _, predicate := range rule.Predicates {
+		if predicate.Reference == "shipped" {
+			found = true
+			if predicate.Field != "received" || predicate.Operator != ">=" || predicate.Value != nil {
+				t.Fatalf("reference must not become a literal: %+v", predicate)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("comparison reference is missing")
+	}
+	request, err := json.Marshal(map[string]string{"source": source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var browser struct {
+		Program *crl.ProgramView `json:"program"`
+		Hash    string           `json:"hash"`
+	}
+	if err := json.Unmarshal([]byte((crlwasm.Engine{}).Compile(string(request))), &browser); err != nil {
+		t.Fatal(err)
+	}
+	if browser.Hash != got.Hash || !reflect.DeepEqual(browser.Program, got.Program) {
+		t.Fatal("CLI and WASM metadata differ")
 	}
 }
 

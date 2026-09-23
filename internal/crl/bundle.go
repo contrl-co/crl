@@ -316,6 +316,18 @@ func normalizeCluster(cluster Cluster, ruleNames map[string]string) (Cluster, er
 }
 
 func validateBundlePredicate(predicate Predicate, signalKinds map[string]string, collectorNames map[string]struct{}, ruleNames map[string]string, clusterNames map[string]string) error {
+	if predicate.Reference != "" {
+		for _, name := range []string{predicate.Field, predicate.Reference} {
+			kind, declared := signalKinds[name]
+			if !declared {
+				return fmt.Errorf("%w: %s", ErrMissingSignal, name)
+			}
+			if kind != "number" {
+				return fmt.Errorf("%w: comparison requires numeric signal %s", ErrTypeMismatch, name)
+			}
+		}
+		return nil
+	}
 	kindForField := func(field string) (string, bool) {
 		if kind, ok := kernelDerivedKind(field); ok {
 			return kind, true
@@ -610,7 +622,11 @@ func canonicalBundleText(bundle Bundle) string {
 func writePredicate(b *strings.Builder, prefix string, predicate Predicate) {
 	switch predicate.Kind {
 	case PredicateNeed:
-		fmt.Fprintf(b, "%sneed %s %s %s\n", prefix, predicate.Field, predicate.Operator, renderValue(predicate.Value))
+		right := renderValue(predicate.Value)
+		if predicate.Reference != "" {
+			right = predicate.Reference
+		}
+		fmt.Fprintf(b, "%sneed %s %s %s\n", prefix, predicate.Field, predicate.Operator, right)
 	case PredicateBlock:
 		fmt.Fprintf(b, "%sblock %s\n", prefix, predicate.Field)
 	case PredicateQuorum:

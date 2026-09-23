@@ -363,6 +363,9 @@ func predicateSubjects(predicate Predicate) []string {
 		if predicate.Field == "" {
 			return nil
 		}
+		if predicate.Reference != "" {
+			return []string{predicate.Field, predicate.Reference}
+		}
 		return []string{predicate.Field}
 	case PredicateQuorum:
 		if predicate.Expression != nil {
