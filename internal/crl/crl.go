@@ -968,7 +968,11 @@ type evidenceIndex struct {
 	collectors map[string][]Signal
 }
 
-// governing returns the declared signals whose freshness gates name.
+// subjectStale reports whether the evidence behind name cannot be shown
+// fresh at now (stale, missing/unparseable observed_at, or zero clock).
+// Such evidence is unavailable wherever it is consulted — need/block
+// already surface EXPIRED; quorum and temporal-reference paths route
+// through here so stale evidence never silently satisfies a gate.
 //
 // A signal governs itself. A COLLECTOR has no observation time of its
 // own — its quorum subject fact is bare presence — so it is governed by
@@ -987,19 +991,22 @@ type evidenceIndex struct {
 // Rule and cluster names are governed by nothing here. A rule already
 // fails its own checks on stale evidence and publishes false, which
 // removes it from a quorum on its own.
-func (e evidenceIndex) governing(name string, facts Facts) []Signal {
+func subjectStale(facts Facts, name string, index evidenceIndex, now time.Time) bool {
 	name = normalizeIdentifier(name)
-	var governing []Signal
-	if signal, ok := e.signals[name]; ok {
-		governing = append(governing, signal)
+	if signal, ok := index.signals[name]; ok {
+		if expired, evaluated := signalExpired(signal, facts, now); evaluated && expired {
+			return true
+		}
 	}
-	for _, signal := range e.collectors[name] {
+	for _, signal := range index.collectors[name] {
 		if !signalInPlay(signal, facts) {
 			continue
 		}
-		governing = append(governing, signal)
+		if expired, evaluated := signalExpired(signal, facts, now); evaluated && expired {
+			return true
+		}
 	}
-	return governing
+	return false
 }
 
 // signalInPlay reports whether the facts carry evidence for a signal:
@@ -1010,20 +1017,6 @@ func signalInPlay(signal Signal, facts Facts) bool {
 	}
 	_, ok := lookupFact(facts, "observed_at."+signal.Name)
 	return ok
-}
-
-// subjectStale reports whether the evidence behind name cannot be shown
-// fresh at now (stale, missing/unparseable observed_at, or zero clock).
-// Such evidence is unavailable wherever it is consulted — need/block
-// already surface EXPIRED; quorum and temporal-reference paths route
-// through here so stale evidence never silently satisfies a gate.
-func subjectStale(facts Facts, name string, index evidenceIndex, now time.Time) bool {
-	for _, signal := range index.governing(name, facts) {
-		if expired, evaluated := signalExpired(signal, facts, now); evaluated && expired {
-			return true
-		}
-	}
-	return false
 }
 
 // subjectPresent is subjectTruthy plus the freshness gate: a truthy but
