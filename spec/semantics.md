@@ -26,8 +26,8 @@ that is non-empty after trimming whitespace, or a non-zero number.
 | `AUTHORIZED` | every required condition proved against present, fresh evidence |
 | `DENIED` | a required condition evaluated against present, fresh evidence and does not hold |
 | `BLOCKED` | an explicit blocker is active |
-| `INSUFFICIENT_EVIDENCE` | a required fact is absent, or a quorum is unmet |
-| `EXPIRED` | a required signal exists but its freshness cannot be proven (stale, missing or unparseable observation time, or no evaluation clock) |
+| `INSUFFICIENT_EVIDENCE` | a required fact is absent, or a quorum is out of reach on the evidence present |
+| `EXPIRED` | required evidence exists but its freshness cannot be proven (stale, missing or unparseable observation time, or no evaluation clock), including a quorum that only staleness keeps below its threshold |
 
 Only `AUTHORIZED` advances anything; the other four all withhold.
 Consumers must handle all five spellings exactly as written.
@@ -74,16 +74,29 @@ For a signal declared with `expires <RFC3339>`: fresh ⇔ the clock is
 not past the instant; no observation time is needed, but a clock still
 is.
 
-Staleness is enforced everywhere a signal is consulted, not just in
+Staleness is enforced everywhere evidence is consulted, not just in
 `need`:
 
-- a stale signal used as a **quorum subject** does not count toward a
-  count quorum;
-- a stale signal referenced anywhere in a **boolean quorum
-  expression** taints the whole quorum → the check fails as expired
-  (a negated stale subject must not read as "cleared");
+- a stale subject does not count toward a **count quorum**;
+- a stale subject in a **boolean quorum expression** is *unknown* —
+  never true, so it cannot carry a branch, and never false, so a
+  negated stale subject does not read as "cleared";
 - a stale `time` signal used as a **temporal reference** fails the
   temporal check as expired.
+
+A quorum subject that names a **collector** is judged on the signals
+that collector declares. A collector has no observation time of its
+own — its subject fact is bare presence — so without this a quorum over
+collectors would consult no expiry at all and evidence of any age would
+satisfy it. A collector's signal counts toward that judgement once the
+facts put it *in play* by carrying either its value or an
+`observed_at.<signal>` entry; a signal that was never supplied is
+absent, not stale. Supplying a value without an observation time
+therefore leaves the age unprovable → **expired**.
+
+Subjects that name a rule or a cluster need no separate gate: a rule
+already fails its own checks on stale evidence and publishes `false`,
+which removes it from the quorum.
 
 ## Predicates
 
@@ -130,25 +143,42 @@ conventions; the linter flags expiry-shaped blocker names (`CRL208`).
 ### quorum (count form)
 
 Count the listed subjects that are present — truthy **and** fresh —
-and pass when `count >= n`. An unmet quorum fails as quorum-not-met
-(`INSUFFICIENT_EVIDENCE` at outcome selection).
+and pass when `count >= n`. A stale subject *reduces* the count; it
+does not disqualify the quorum. Two fresh sources out of three
+therefore satisfy a threshold of two even when the third has gone
+stale, which is what "two of three independent sources, currently
+fresh" means.
+
+An unmet quorum is spelled by what is missing. If re-observing the
+stale subjects — at the values they already carry — would reach the
+threshold, the shortfall *is* the staleness and the check fails as
+expired (`EXPIRED`). Otherwise the threshold is out of reach on the
+evidence itself and the check fails as quorum-not-met
+(`INSUFFICIENT_EVIDENCE`). One fresh source of three with two stale is
+`EXPIRED`; one fresh source of three with two that never reported is
+`INSUFFICIENT_EVIDENCE`.
 
 ### quorum (boolean form)
 
 Evaluate the expression with three-valued (Kleene) logic over subject
-state. A subject is **true** when its fact is present and truthy,
-**false** when present and not truthy, and **unknown** when no fact
-entry exists under the subject name or any of its `provider.`,
-`provider:`, `rule.`, or `cluster.` spellings. `not unknown` is
+state. A subject is **true** when its fact is present, truthy, and
+fresh, **false** when present and fresh but not truthy, and **unknown**
+when no fact entry exists under the subject name or any of its
+`provider.`, `provider:`, `rule.`, or `cluster.` spellings — or when
+its evidence is present but not provably fresh. `not unknown` is
 unknown; `unknown and false` is false; `unknown or true` is true; every
 other combination involving unknown is unknown. The check passes only
-when the expression evaluates to **true**, so missing evidence can never
-be negated into a clearance (`not <absent>` does not read as satisfied),
-while an `or` with one present, satisfied branch still passes.
+when the expression evaluates to **true**, so neither missing nor stale
+evidence can be negated into a clearance (`not <absent>` and
+`not <stale>` do not read as satisfied), while an `or` with one
+present, fresh, satisfied branch still passes.
 
-Separately, if any referenced subject is a declared signal whose
-freshness cannot be proven, the whole check fails as expired (see
-Freshness above) regardless of the boolean structure.
+Staleness therefore behaves the same way it does in the count form: it
+withdraws one subject rather than disqualifying the expression, so a
+two-of-three written as a disjunction still passes on the branches whose
+evidence is fresh. An unmet expression is spelled by the same test as
+the count form — expired when re-observing the stale subjects would
+satisfy it, quorum-not-met otherwise.
 
 ## What a predicate may reference
 

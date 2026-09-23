@@ -18,9 +18,14 @@ A release tag may be cut only when, on `main`:
 ## Cutting a release
 
 ```sh
-git tag vX.Y.Z
+git tag -s vX.Y.Z -m "CRL vX.Y.Z"
 git push origin vX.Y.Z
 ```
+
+The tag must be annotated and cryptographically verified by GitHub. Its target
+commit must also be GitHub-verified and carry a DCO `Signed-off-by` trailer;
+the release workflow fails closed before publishing if any of those conditions
+is absent.
 
 `vX.Y.Z` is the only tag spelling for new releases. It is simultaneously the
 GitHub release tag and the version consumed by Go modules; GoReleaser strips
@@ -48,16 +53,17 @@ bypass.
 If a released artifact is bad (miscompiles, non-determinism,
 vulnerability, mis-signed):
 
-1. **Stop the bleeding**: delete the GitHub release so
-   `releases/latest` stops serving it (Releases → delete; the tag may stay
-   for forensics).
+1. **Stop default distribution without erasing evidence**: mark the GitHub
+   release as a prerelease and prepend a security warning to its notes. Keep
+   the tag, assets, checksums, signatures, SBOMs, and attestations immutable for
+   forensics; direct downloads remain reachable and must be treated as affected.
 2. **Homebrew**: revert the formula commit in the tap repository so
    `brew install crlc` resolves to the previous release.
 3. **Marketplace**: unpublish the extension version
    (`npx @vscode/vsce unpublish` or the marketplace UI) if the
    extension is affected.
-4. **Advise**: publish a release note on the deleted release's
-   replacement and a `SECURITY.md`-linked advisory stating: affected
+4. **Advise**: update the affected release notes and publish a
+   `SECURITY.md`-linked advisory stating: affected
    versions, the failure, the checksums of the bad artifacts, and the
    fixed version. Consumers pin by checksum — give them the exact bad
    hashes to hunt for.

@@ -9,6 +9,16 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ## [Unreleased]
 
+### Added
+
+- A browser build of the toolchain: `cmd/crl-wasm` compiles CRL, lints
+  it, projects its graph, and evaluates it against facts inside a web
+  page, with no server and no source leaving the tab. Build it with
+  `scripts/build-wasm.sh`; the JS contract is in
+  [docs/wasm.md](docs/wasm.md). CI gates that the artifact links only
+  the language, that it instantiates in a real JS host, and that it
+  compiles the example corpus to the same hashes `crlc` does.
+
 ### Security
 
 - The pinned Go toolchain is updated to 1.25.12 to fix the reachable
@@ -22,8 +32,22 @@ weekly; the v1 edition's compilation contract does not change (see
   opposite decisions.
 - Quorum evaluation is three-valued (Kleene): a missing subject is
   *unknown*, so a negated absent subject (`not <absent>`) can no longer
-  read as a clearance. Freshness taints a whole quorum: a stale subject
-  fails the check as expired regardless of boolean structure.
+  read as a clearance. A stale subject is unknown too — it can neither
+  carry a branch nor read as cleared under negation.
+- **Quorum thresholds now enforce freshness.** A quorum subject that
+  names a collector is judged on the signals that collector declares;
+  previously only a subject that named a signal was checked, and a
+  collector name matched nothing in the signal index, so a count quorum
+  consulted no expiry at all and evidence of any age satisfied it —
+  evidence stamped in 1999 met a thirty-day window and authorized. A
+  stale subject now reduces the count instead of being ignored, and
+  instead of disqualifying a boolean expression, so "two of three
+  independent sources, currently fresh" is expressible in both forms: a
+  disjunction still passes on the branches whose evidence is fresh.
+  An unmet quorum reports `EXPIRED` when re-observing the stale
+  subjects would reach the threshold, and `INSUFFICIENT_EVIDENCE` when
+  the threshold is out of reach on the evidence present. Bundle hashes
+  are unaffected — this changes evaluation, not compilation.
 - Evaluation fails closed in more places: a stale, future-dated, or
   unprovable observation is `EXPIRED`; a zero-value or round-tripped
   compiled bundle no longer authorizes; an empty program authorizes
@@ -72,6 +96,9 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Fixed
 
+- Same-source collectors can no longer count as independent quorum members.
+  The compiler rejects them with `CRL121`; hashes of accepted programs are
+  unchanged.
 - Newly rejected (each could previously produce a misleading or unsafe
   bundle): duplicate `target`, `package`, `bundle`, and cluster `rules`
   statements; a `count()` threshold above the subject count; a

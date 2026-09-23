@@ -45,6 +45,9 @@ func AnalyzeBundle(bundle Bundle) (SemanticModel, error) {
 }
 
 func analyzeNormalizedBundle(normalized Bundle) (SemanticModel, error) {
+	if err := validateQuorumSourceIndependence(normalized); err != nil {
+		return SemanticModel{}, err
+	}
 	if err := validateFinalPolicyReachability(normalized); err != nil {
 		return SemanticModel{}, err
 	}

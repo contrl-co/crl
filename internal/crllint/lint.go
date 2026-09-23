@@ -1,6 +1,7 @@
 package crllint
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/contrl-co/crl/internal/crl"
-	"golang.org/x/text/unicode/norm"
 )
 
 type Severity string
@@ -83,7 +83,11 @@ func LintSource(path, source string, opts Options) Report {
 
 	compilation, err := crl.CompileLanguage(source)
 	if err != nil {
-		diagnostic := errorDiagnostic("CRL120", err)
+		code := "CRL120"
+		if errors.Is(err, crl.ErrNonIndependentQuorum) {
+			code = "CRL121"
+		}
+		diagnostic := errorDiagnostic(code, err)
 		if diagnostic.Line == 1 {
 			if span, ok := spanForCompilerError(document, err.Error()); ok {
 				diagnostic.Line = span.Line
@@ -177,7 +181,6 @@ func addDocumentDiagnostics(document crl.Document, add *func(Diagnostic)) {
 		for _, predicate := range rule.Predicates {
 			addBlockNamingDiagnostics(predicate, add)
 		}
-		addQuorumIndependenceDiagnostics(rule, add)
 	}
 	for _, cluster := range document.Clusters {
 		for _, predicate := range cluster.Predicates {
@@ -368,88 +371,6 @@ func addDuplicateSourceFieldDiagnostics(ruleName string, collector crl.Collector
 			continue
 		}
 		seen[field] = signal
-	}
-}
-
-// addQuorumIndependenceDiagnostics warns when one quorum counts two or more
-// distinct collectors that read the SAME source. A count/threshold quorum
-// asserts independent corroboration ("N of M independent sources"); collectors
-// sharing a source are not independent, so the count overstates how many
-// separate sources actually agree. Flagged, not rejected — the bundle compiles.
-//
-// The check runs per authored rule over that rule's own collectors. A shared
-// source introduced across an `extends` boundary (parent and child each
-// declaring the same source, merged only at compile time) is not covered here.
-func addQuorumIndependenceDiagnostics(rule crl.RuleObject, add *func(Diagnostic)) {
-	foldIdent := func(s string) string {
-		return strings.ToLower(strings.TrimSpace(norm.NFC.String(s)))
-	}
-	foldSource := func(s string) string {
-		return norm.NFC.String(strings.TrimSpace(s))
-	}
-	sourceByCollector := make(map[string]string, len(rule.Collectors))
-	for _, collector := range rule.Collectors {
-		source := foldSource(collector.Source)
-		if source == "" {
-			continue
-		}
-		sourceByCollector[foldIdent(collector.Name)] = source
-	}
-	if len(sourceByCollector) == 0 {
-		return
-	}
-	for _, predicate := range rule.Predicates {
-		if predicate.Predicate.Kind != crl.PredicateQuorum {
-			continue
-		}
-		// A count quorum names collectors in Providers; a boolean quorum
-		// names them in Expression. Gather subjects from whichever is set.
-		subjects := append([]string(nil), predicate.Predicate.Providers...)
-		if predicate.Predicate.Expression != nil {
-			subjects = append(subjects, crl.QuorumExpressionSubjects(predicate.Predicate.Expression)...)
-		}
-		collectorsBySource := map[string][]string{}
-		seen := map[string]struct{}{}
-		for _, subject := range subjects {
-			name := foldIdent(subject)
-			if name == "" {
-				continue
-			}
-			if _, ok := seen[name]; ok {
-				continue
-			}
-			seen[name] = struct{}{}
-			if source, ok := sourceByCollector[name]; ok {
-				collectorsBySource[source] = append(collectorsBySource[source], name)
-			}
-		}
-		sharedSources := make([]string, 0, len(collectorsBySource))
-		for source, names := range collectorsBySource {
-			if len(names) >= 2 {
-				sharedSources = append(sharedSources, source)
-			}
-		}
-		sort.Strings(sharedSources)
-		for _, source := range sharedSources {
-			names := collectorsBySource[source]
-			sort.Strings(names)
-			quoted := make([]string, len(names))
-			for i, name := range names {
-				quoted[i] = fmt.Sprintf("%q", name)
-			}
-			(*add)(Diagnostic{
-				Line:     predicate.Span.Line,
-				Column:   predicate.Span.Column,
-				Severity: SeverityWarning,
-				Code:     "CRL211",
-				Message: fmt.Sprintf(
-					"quorum in rule %q counts collectors %s that share source %q; a quorum over one source is not independent corroboration",
-					rule.Name,
-					strings.Join(quoted, ", "),
-					source,
-				),
-			})
-		}
 	}
 }
 

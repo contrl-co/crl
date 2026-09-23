@@ -14,7 +14,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.25.12"
-  NODE_VERSION: "22.12.0"
+  NODE_VERSION: "22.21.1"
   GOFLAGS: -mod=readonly
 
 jobs:
@@ -26,7 +26,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Require a v-prefixed semantic version on main
+      - name: Require a signed, v-prefixed semantic version tag on main
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -40,12 +42,32 @@ jobs:
             echo "::error::Release tag must point to a commit reachable from main."
             exit 1
           fi
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          if [ "$(jq -r '.object.type' <<<"$ref_json")" != tag ]; then
+            echo "::error::Release tag must be an annotated, cryptographically signed tag."
+            exit 1
+          fi
+          tag_oid="$(jq -r '.object.sha' <<<"$ref_json")"
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_oid" --jq '.verification.verified')" != true ]; then
+            echo "::error::Release tag signature is not verified by GitHub."
+            exit 1
+          fi
+          commit_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag_commit")"
+          if [ "$(jq -r '.commit.verification.verified' <<<"$commit_json")" != true ]; then
+            echo "::error::Release commit signature is not verified by GitHub."
+            exit 1
+          fi
+          if ! jq -r '.commit.message' <<<"$commit_json" | grep -q '^Signed-off-by: .\+ <[^>][^>]*>$'; then
+            echo "::error::Release commit is missing a DCO Signed-off-by trailer."
+            exit 1
+          fi
 
   release:
     name: Build, sign, and publish
     needs: validate-tag
     runs-on: ubuntu-24.04
     permissions:
+      attestations: write
       contents: write
       id-token: write
     env:
@@ -66,6 +88,8 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
       - name: Require cross-repository release credentials
         shell: bash
         run: |
@@ -111,6 +135,15 @@ jobs:
           distribution: goreleaser
           version: v2.6.1
           args: release --clean
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/*.cdx.json
+            editors/vscode/crl-language-support-*.vsix
       - name: Require a reviewable Homebrew update
         shell: bash
         env:

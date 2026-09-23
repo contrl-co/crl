@@ -71,6 +71,7 @@ SBOMs, and keyless cosign signatures — verify before trusting; see
 | [docs/crlc.md](docs/crlc.md) | CLI reference and the Go embedding API |
 | [docs/authoring-patterns.md](docs/authoring-patterns.md) | Common bundle shapes and when to use each |
 | [docs/diagnostics.md](docs/diagnostics.md) | The `CRL###` lint diagnostic catalog |
+| [docs/wasm.md](docs/wasm.md) | The browser build: compile, lint, graph, and evaluate CRL in a web page |
 | [examples/](examples/README.md) | Runnable examples covering every language feature |
 | [editors/vscode/](editors/vscode/README.md) | VS Code extension: highlighting, snippets, live diagnostics |
 

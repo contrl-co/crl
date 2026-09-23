@@ -117,11 +117,20 @@ Use count quorum when more than one independent evidence source can
 support the same authorization. `quorum 2 of 3 a b c` is equivalent
 sugar.
 
+The count is over sources that are **currently fresh**: a collector
+counts only while the signals it declares are inside their window, so
+the rule above reads "two of these three sources corroborate, right
+now". A source that goes stale drops out of the count and the other two
+still authorize; when staleness alone is what puts the count below the
+threshold, the decision is `EXPIRED` rather than
+`INSUFFICIENT_EVIDENCE`, which tells the consumer to re-collect rather
+than to go find another source.
+
 The count is only honest when the collectors are genuinely distinct
 sources. Two collectors that read the **same** `source` do not
 corroborate independently — counting both overstates how many separate
-sources agree. The linter flags this as **CRL211**; give each
-independent input its own source, or count only over distinct sources.
+sources agree. Compilation rejects this as **CRL121**. Give each independent
+input its own source, or count only over distinct sources.
 
 ## Multi-party acceptance (counterparty attestation)
 

@@ -12,6 +12,7 @@ authoring. Codes are append-only: a code never changes meaning.
 | `CRL101` | Source contains no statements |
 | `CRL110` | Document-structure error (misplaced declaration; duplicate `target`, `package`, `bundle`, or cluster `rules` statement; unclosed block; signal before collector; malformed inheritance; quorum threshold out of range; quorum expression too large or too deeply nested) |
 | `CRL120` | Compile error (unknown signal or quorum subject, type mismatch, unsupported operator, duplicate names, conflicting expiry, unreachable rule under a final policy, block-only global final policy) |
+| `CRL121` | A quorum counts two collectors backed by the same evidence source; compilation rejects the rule because the collectors are not independent corroboration |
 
 The message carries the underlying compiler error; the diagnostic is
 positioned at the offending line where the compiler can attribute one.
@@ -31,7 +32,7 @@ positioned at the offending line where the compiler can attribute one.
 | `CRL208` | A `block` field named like an expiry flag (`*expired*`, `*_expires`) — an active blocker reports `BLOCKED`, never `EXPIRED`; declare a signal expiry or use a temporal predicate for expiry semantics |
 | `CRL209` | A signal is declared but never referenced by a `need`, `block`, `quorum`, or temporal predicate — it does not affect the decision, so dropping the predicate that used it silently removes a requirement or blocker |
 | `CRL210` | An unindented `need`/`block`/`quorum` after a rule body was scoped INTO that rule by the rule-body carve-out; to declare a global final policy, put it before the rules |
-| `CRL211` | A quorum counts two or more collectors that read the same `source`; collectors sharing a source are not independent, so the count overstates how many distinct sources corroborate |
+| `CRL211` | Deprecated warning for shared-source collector quorums; `CRL121` is the enforced compile error |
 
 ## Editor integration
 

@@ -45,12 +45,14 @@ install.
 curl -fsSL https://raw.githubusercontent.com/contrl-co/crl/main/packaging/install.sh | sh
 ```
 
-The script downloads the release for your OS/arch, verifies the
-SHA-256 against the published checksums file, verifies its keyless
-signature when `cosign` is installed, and installs to `~/.local/bin`
-(override with `CRLC_INSTALL_DIR`). Pipe-to-shell is a convenience; the
-audit-grade path is downloading the script, reading it, installing
-`cosign`, and running the script yourself.
+The script downloads the release for your OS/arch, requires `cosign`, verifies
+the checksum manifest's keyless identity, verifies the archive SHA-256, and
+installs to `~/.local/bin` (override with `CRLC_INSTALL_DIR`). It fails closed
+when `cosign` is absent. `CRLC_ALLOW_UNVERIFIED=1` is an explicit emergency
+checksum-only fallback and emits a warning; it must not be used for routine
+installation. Pipe-to-shell is a convenience; the audit-grade path is
+downloading the script, reading it, installing `cosign`, and running the script
+yourself.
 
 ## From source
 
