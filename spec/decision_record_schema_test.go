@@ -25,6 +25,7 @@ const decisionRecordSchemaID = "https://contrl.co/schemas/crl/decision-record-v1
 
 type mutation struct {
 	Name  string   `json:"name"`
+	Layer string   `json:"layer,omitempty"`
 	Path  []string `json:"path"`
 	Value any      `json:"value"`
 }
@@ -51,6 +52,7 @@ func TestDecisionRecordSchema(t *testing.T) {
 		{Name: "maximum safe number", Path: []string{"evaluation", "facts", "approved"}, Value: json.Number("9007199254740991")},
 		{Name: "minimum safe number", Path: []string{"evaluation", "facts", "approved"}, Value: json.Number("-9007199254740991")},
 		{Name: "nanosecond timestamp", Path: []string{"created_at"}, Value: "2026-08-06T15:00:00.123456789Z"},
+		{Name: "language edition is independent of record format", Path: []string{"rule", "edition"}, Value: "v2"},
 	} {
 		t.Run(boundary.Name, func(t *testing.T) {
 			document := decodeStrictDocument(t, validBytes)
@@ -131,11 +133,6 @@ func TestAuthorizedDecisionRecordFixtureIsReproducible(t *testing.T) {
 	}
 	facts := evaluation["facts"].(map[string]any)
 	actualTrace := jsonValue(t, compiled.EvaluateAt(facts, at)).(map[string]any)
-	for _, field := range []string{"rules", "clusters", "global_checks", "checks"} {
-		if _, ok := actualTrace[field]; !ok {
-			actualTrace[field] = []any{}
-		}
-	}
 	if !reflect.DeepEqual(actualTrace, evaluation["trace"]) {
 		t.Fatalf("fixture trace does not reproduce\ngot:  %v\nwant: %v", actualTrace, evaluation["trace"])
 	}
@@ -162,8 +159,11 @@ func loadDecisionRecordSchema(t *testing.T) *jsonschema.Schema {
 	document := decodeStrictDocument(t, readFixture(t, "decision-record-v1.schema.json"))
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	compiler.AssertFormat()
 	compiler.AssertContent()
+	meta := decodeStrictDocument(t, readFixture(t, "decision-record-v1-dialect.json"))
+	if err := compiler.AddResource("https://contrl.co/schemas/crl/decision-record-v1-dialect.json", meta); err != nil {
+		t.Fatal(err)
+	}
 	if err := compiler.AddResource(decisionRecordSchemaID, document); err != nil {
 		t.Fatalf("add schema resource: %v", err)
 	}
@@ -195,6 +195,9 @@ func decodeStrictDocument(t *testing.T, body []byte) any {
 func strictDocument(body []byte) (any, error) {
 	if !utf8.Valid(body) {
 		return nil, fmt.Errorf("invalid UTF-8")
+	}
+	if err := rejectSurrogates(body); err != nil {
+		return nil, err
 	}
 	if _, err := crlcrypto.CanonicalJSON(json.RawMessage(body)); err != nil {
 		return nil, err

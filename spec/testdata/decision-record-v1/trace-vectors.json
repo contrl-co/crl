@@ -1,0 +1,73 @@
+[
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "approved": true,
+      "observed_at.approved": "2026-08-06T14:00:00Z",
+      "provider.registry": true
+    },
+    "name": "AUTHORIZED",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "trace_hash": "0721b1dee1bbfdc4b816df4ed62588bc204bd996e8599bfe5909d1fc4d418fdc",
+    "outcome": "AUTHORIZED"
+  },
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "approved": false,
+      "observed_at.approved": "2026-08-06T14:00:00Z",
+      "provider.registry": true
+    },
+    "name": "DENIED",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "trace_hash": "0e878b2da941e5ac550e0a5be50495f03f8d19a5752445107caf610772df5905",
+    "outcome": "DENIED"
+  },
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "approved": true,
+      "observed_at.approved": "2026-08-06T14:00:00Z",
+      "provider.registry": true
+    },
+    "name": "BLOCKED",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n\tblock approved\n",
+    "trace_hash": "d92e7fc7e35b6cb6028e59ad31934b1b0a2dfc7b5f439e543a74510508d4ffbf",
+    "outcome": "BLOCKED"
+  },
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "provider.registry": true
+    },
+    "name": "INSUFFICIENT_EVIDENCE",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "trace_hash": "c8aeef5685dcd79b8e0855a32f1f2848db3ea4285575b0436033a78cee5af5c8",
+    "outcome": "INSUFFICIENT_EVIDENCE"
+  },
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "approved": true,
+      "observed_at.approved": "2026-06-01T14:00:00Z",
+      "provider.registry": true
+    },
+    "name": "EXPIRED",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "trace_hash": "5e753a43bb1f30923c83804a46c6792f3dec790b7eede5296265c11f83951849",
+    "outcome": "EXPIRED"
+  },
+  {
+    "at": "2026-08-06T15:00:00Z",
+    "facts": {
+      "observed_at.received": "2026-08-06T14:00:00Z",
+      "observed_at.shipped": "2026-08-06T14:00:00Z",
+      "received": 1.50,
+      "shipped": 1.0
+    },
+    "name": "numeric reference",
+    "source": "crl v1\nrule receipt\ntarget delivery\ncollector warehouse source api from warehouse.receipts\nsignal shipped number from shipped ttl 1d\nsignal received number from received ttl 1d\nneed received >= shipped\n",
+    "trace_hash": "a19556a13e8f485c1a62dd4ce5ea46303f177f16f473fc93c5e69b4aec3b39b8",
+    "outcome": "AUTHORIZED"
+  }
+]

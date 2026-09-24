@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "https://contrl.co/schemas/crl/decision-record-v1-dialect.json",
   "$id": "https://contrl.co/schemas/crl/decision-record-v1.schema.json",
   "title": "CRL decision record v1",
   "type": "object",
@@ -12,7 +12,8 @@
     "rule",
     "evaluation",
     "record_hash",
-    "signatures"
+    "signatures",
+    "trust_policy"
   ],
   "properties": {
     "schema_version": {
@@ -51,6 +52,9 @@
       "additionalProperties": {
         "$ref": "#/$defs/jsonValue"
       }
+    },
+    "trust_policy": {
+      "$ref": "#/$defs/trustPolicy"
     }
   },
   "$defs": {
@@ -150,7 +154,8 @@
       ],
       "properties": {
         "edition": {
-          "const": "v1"
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$"
         },
         "source": {
           "type": "string",
@@ -215,7 +220,8 @@
         "provenance",
         "outcome",
         "trace",
-        "trace_hash"
+        "trace_hash",
+        "evaluator"
       ],
       "properties": {
         "at": {
@@ -245,6 +251,9 @@
         },
         "trace_hash": {
           "$ref": "#/$defs/digest"
+        },
+        "evaluator": {
+          "$ref": "#/$defs/evaluator"
         }
       }
     },
@@ -347,12 +356,17 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/provider"
-          }
+          },
+          "minItems": 1
         },
         "passed": {
           "type": "boolean"
         },
         "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference": {
           "type": "string",
           "minLength": 1
         }
@@ -365,8 +379,7 @@
         "rule_name",
         "aspect",
         "result",
-        "authorized",
-        "checks"
+        "authorized"
       ],
       "properties": {
         "rule_name": {
@@ -387,7 +400,8 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/check"
-          }
+          },
+          "minItems": 1
         }
       }
     },
@@ -418,9 +432,7 @@
       "required": [
         "cluster_name",
         "result",
-        "authorized",
-        "members",
-        "checks"
+        "authorized"
       ],
       "properties": {
         "cluster_name": {
@@ -437,13 +449,15 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/clusterMember"
-          }
+          },
+          "minItems": 1
         },
         "checks": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/check"
-          }
+          },
+          "minItems": 1
         }
       }
     },
@@ -453,11 +467,7 @@
       "required": [
         "result",
         "authorized",
-        "aspect",
-        "rules",
-        "clusters",
-        "global_checks",
-        "checks"
+        "aspect"
       ],
       "properties": {
         "result": {
@@ -467,32 +477,56 @@
           "type": "boolean"
         },
         "aspect": {
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
         "rules": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/ruleTrace"
-          }
+          },
+          "minItems": 1
         },
         "clusters": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/clusterTrace"
-          }
+          },
+          "minItems": 1
         },
         "global_checks": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/check"
-          }
+          },
+          "minItems": 1
         },
         "checks": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/check"
+          },
+          "minItems": 1
+        }
+      },
+      "if": {
+        "properties": {
+          "aspect": {
+            "const": ""
           }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "const": "INSUFFICIENT_EVIDENCE"
+          },
+          "authorized": {
+            "const": false
+          },
+          "rules": false,
+          "clusters": false,
+          "global_checks": false,
+          "checks": false
         }
       }
     },
@@ -524,6 +558,43 @@
         "signature": {
           "type": "string",
           "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$"
+        }
+      }
+    },
+    "trustPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "hash"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "hash": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(git:[0-9a-f]{40}|sha256:[0-9a-f]{64})$"
         }
       }
     }

@@ -21,6 +21,11 @@ weekly; the v1 edition's compilation contract does not change (see
 
 ### Security
 
+- The unreleased decision-record v1 contract now specifies numeric-token and
+  Unicode handling, record-bound signatures, complete provenance, independent
+  parties, and pinned evaluator and trust-policy identities. Its draft trace
+  and record fixtures are replaced; compiler source and bundle hashes do not
+  change. Schema validation alone does not establish trust or correctness.
 - New releases sign `checksums.txt` as a Sigstore bundle compatible with the
   pinned cosign 3.1.2. Installation requires that bundle's GitHub Actions
   identity; detached GitLab signatures remain accepted only for the three

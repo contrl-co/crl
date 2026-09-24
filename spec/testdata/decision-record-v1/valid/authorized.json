@@ -7,6 +7,10 @@
   "created_at": "2026-08-06T15:00:00Z",
   "evaluation": {
     "at": "2026-08-06T15:00:00Z",
+    "evaluator": {
+      "id": "github.com/contrl-co/crl",
+      "revision": "git:43f49dcbfc49fe7e3381fad4b37814b95d2d8a34"
+    },
     "facts": {
       "approved": true,
       "observed_at.approved": "2026-08-06T14:00:00Z",
@@ -61,8 +65,6 @@
           "scope": "rule"
         }
       ],
-      "clusters": [],
-      "global_checks": [],
       "result": "AUTHORIZED",
       "rules": [
         {
@@ -102,9 +104,15 @@
         }
       ]
     },
-    "trace_hash": "ec9d0e2a5a76ca3a343b2371555846bf4e4039921ba71531d22cd106b842fada"
+    "trace_hash": "0721b1dee1bbfdc4b816df4ed62588bc204bd996e8599bfe5909d1fc4d418fdc"
   },
-  "record_hash": "2b70157378b0e45e636649ea8abaeaea2c2ebf6e7477ada1896e2a01b6050e14",
+  "extensions": {
+    "contrl.co/workflow": {
+      "number": 1.50,
+      "purpose": "conformance-only"
+    }
+  },
+  "record_hash": "4488df6cdf9feaefe1f609c1550610b6dbbb26e91d66da90d267aa7c80567d0b",
   "record_id": "01989f7e-7b80-7000-8000-000000000001",
   "rule": {
     "bundle_hash": "f2b9cb4b12f279bc27139b8e1c5c431cb36ef2a2c66d342fdc55ac63a4c747aa",
@@ -115,5 +123,24 @@
     "source_hash": "b9fe00a72b027735ab86ec07581bbc97e4f10f9e8fd448c4cda15b7dc1c5d569"
   },
   "schema_version": "crl-decision-record/v1",
-  "signatures": []
+  "signatures": [
+    {
+      "algorithm": "ed25519",
+      "key_id": "issuer-2026-01",
+      "role": "issuer",
+      "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==",
+      "signed_at": "2026-08-06T15:00:00Z"
+    },
+    {
+      "algorithm": "ed25519",
+      "key_id": "reviewer-2026-01",
+      "role": "reviewer",
+      "signature": "m4CNwXCoP1uY58vs1P/UiWNGOIc0NbBOi/9P2CELg1p8zHv9qzydB6HbBFQnil3B0MVnQRhpeYT8XUoP6cTWCg==",
+      "signed_at": "2026-08-06T15:00:00Z"
+    }
+  ],
+  "trust_policy": {
+    "hash": "14cee99fdb47a64b354641efce6e08f6609aeb9866a4134bc447f7d6d772ae86",
+    "id": "example-only/two-parties/v1"
+  }
 }

@@ -1,0 +1,27 @@
+{
+  "at": "2026-08-06T15:00:00Z",
+  "domain": "contrl.co/example",
+  "id": "example-only/two-parties/v1",
+  "keys": {
+    "issuer-2026-01": {
+      "party": "example-issuer",
+      "public_key": "8a0f1972cfbcc83ac86d55b4ce712cc7548db51ba1c02773ebd19993bb2763bd",
+      "role": "issuer"
+    },
+    "issuer-reviewer": {
+      "party": "example-issuer",
+      "public_key": "8a0f1972cfbcc83ac86d55b4ce712cc7548db51ba1c02773ebd19993bb2763bd",
+      "role": "reviewer"
+    },
+    "reviewer-2026-01": {
+      "party": "example-reviewer",
+      "public_key": "0a1fb79de30e2c00eb97648cf675c511693eeb3f1f689248f295eb72ce132895",
+      "role": "reviewer"
+    }
+  },
+  "minimum_parties": 2,
+  "required_roles": [
+    "issuer",
+    "reviewer"
+  ]
+}
