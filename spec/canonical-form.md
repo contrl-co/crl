@@ -83,8 +83,8 @@ Canonicalization Scheme) implementation (see the note on numbers below):
   CRL's single numeric type is IEEE-754 double; whole numbers render
   with exact integer digits, and an integer literal beyond ±2^53 is
   rejected at compile time rather than silently rounded;
-- strings are emitted verbatim, with no HTML escaping of `<`, `>`, or
-  `&`;
+- strings escape quote, backslash, control characters, U+2028, and U+2029
+  using JSON escapes, with no HTML escaping of `<`, `>`, or `&`;
 - duplicate object keys rejected outright — two inputs that differ
   only in duplicate-key content must never canonicalize to the same
   bytes.

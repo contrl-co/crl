@@ -1,0 +1,230 @@
+[
+  {
+    "name": "missing provenance",
+    "layer": "structure",
+    "path": ["evaluation", "provenance"],
+    "value": []
+  },
+  {
+    "name": "orphan provenance",
+    "layer": "structure",
+    "path": ["evaluation", "provenance", "0", "fact"],
+    "value": "absent"
+  },
+  {
+    "name": "duplicate fact different supplier",
+    "layer": "structure",
+    "path": ["evaluation", "provenance"],
+    "value": [{"fact": "approved", "observed_at": "2026-08-06T14:00:00Z", "source": "/evidence/registry.json", "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3", "supplier": "example-registry"}, {"fact": "approved", "observed_at": "2026-08-06T14:00:00Z", "source": "/evidence/registry.json", "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3", "supplier": "different"}]
+  },
+  {
+    "name": "reversed provenance",
+    "layer": "structure",
+    "path": ["evaluation", "provenance"],
+    "value": [{"fact": "provider.registry", "observed_at": "2026-08-06T14:00:00Z", "source": "/evidence/registry.json", "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3", "supplier": "example-registry"}, {"fact": "approved", "observed_at": "2026-08-06T14:00:00Z", "source": "/evidence/registry.json", "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3", "supplier": "example-registry"}]
+  },
+  {
+    "name": "orphan observation",
+    "layer": "structure",
+    "path": ["evaluation", "facts", "observed_at.absent"],
+    "value": "2026-08-06T14:00:00Z"
+  },
+  {
+    "name": "mismatched observation",
+    "layer": "structure",
+    "path": ["evaluation", "facts", "observed_at.approved"],
+    "value": "2026-08-05T14:00:00Z"
+  },
+  {
+    "name": "duplicate signature identity different time",
+    "layer": "structure",
+    "path": ["signatures"],
+    "value": [{"algorithm": "ed25519", "key_id": "issuer-2026-01", "role": "issuer", "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==", "signed_at": "2026-08-06T15:00:00Z"}, {"algorithm": "ed25519", "key_id": "issuer-2026-01", "role": "issuer", "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==", "signed_at": "2026-08-06T16:00:00Z"}]
+  },
+  {
+    "name": "reversed signatures",
+    "layer": "structure",
+    "path": ["signatures"],
+    "value": [{"algorithm": "ed25519", "key_id": "reviewer-2026-01", "role": "reviewer", "signature": "m4CNwXCoP1uY58vs1P/UiWNGOIc0NbBOi/9P2CELg1p8zHv9qzydB6HbBFQnil3B0MVnQRhpeYT8XUoP6cTWCg==", "signed_at": "2026-08-06T15:00:00Z"}, {"algorithm": "ed25519", "key_id": "issuer-2026-01", "role": "issuer", "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==", "signed_at": "2026-08-06T15:00:00Z"}]
+  },
+  {
+    "name": "null trace checks",
+    "layer": "structure",
+    "path": ["evaluation", "trace", "checks"],
+    "value": null
+  },
+  {
+    "name": "empty optional trace array",
+    "layer": "structure",
+    "path": ["evaluation", "trace", "clusters"],
+    "value": []
+  },
+  {
+    "name": "unknown nested check field",
+    "layer": "structure",
+    "path": ["evaluation", "trace", "checks", "0", "unknown"],
+    "value": true
+  },
+  {
+    "name": "unsafe decimal before rounding",
+    "layer": "structure",
+    "path": ["evaluation", "facts", "approved"],
+    "value": 9007199254740991.1
+  },
+  {
+    "name": "truncated digest",
+    "layer": "structure",
+    "path": ["record_hash"],
+    "value": "000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "name": "empty authorized aspect",
+    "layer": "structure",
+    "path": ["evaluation", "trace", "aspect"],
+    "value": ""
+  },
+  {
+    "name": "nonobject bundle",
+    "layer": "structure",
+    "path": ["rule", "canonical_bundle"],
+    "value": "[]"
+  },
+  {
+    "name": "duplicate bundle key",
+    "layer": "structure",
+    "path": ["rule", "canonical_bundle"],
+    "value": "{\"name\":1,\"name\":2}"
+  },
+  {
+    "name": "surrogate in embedded bundle",
+    "layer": "structure",
+    "path": ["rule", "canonical_bundle"],
+    "value": "{\"name\":\"\\ud800\"}"
+  },
+  {
+    "name": "source tampering",
+    "layer": "integrity",
+    "path": ["rule", "source"],
+    "value": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n\n"
+  },
+  {
+    "name": "bundle tampering",
+    "layer": "integrity",
+    "path": ["rule", "canonical_bundle"],
+    "value": "{}"
+  },
+  {
+    "name": "trace tampering",
+    "layer": "integrity",
+    "path": ["evaluation", "trace", "checks", "0", "actual"],
+    "value": false
+  },
+  {
+    "name": "context tampering",
+    "layer": "integrity",
+    "path": ["context", "subject"],
+    "value": "different"
+  },
+  {
+    "name": "extension tampering",
+    "layer": "integrity",
+    "path": ["extensions", "contrl.co/workflow", "purpose"],
+    "value": "different"
+  },
+  {
+    "name": "unsigned record",
+    "layer": "trust",
+    "path": ["signatures"],
+    "value": []
+  },
+  {
+    "name": "one party",
+    "layer": "trust",
+    "path": ["signatures"],
+    "value": [{"algorithm": "ed25519", "key_id": "issuer-2026-01", "role": "issuer", "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==", "signed_at": "2026-08-06T15:00:00Z"}]
+  },
+  {
+    "name": "two roles one party",
+    "layer": "trust",
+    "path": ["signatures"],
+    "value": [{"algorithm": "ed25519", "key_id": "issuer-2026-01", "role": "issuer", "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==", "signed_at": "2026-08-06T15:00:00Z"}, {"algorithm": "ed25519", "key_id": "issuer-reviewer", "role": "reviewer", "signature": "ROHKKeh46WfI7Eu0lnVNGQxIE611y3YUPRNFxVCR2wKVzYt3oibXveemAWbCrmlrcSB/plPskqm/o+huJxdfDQ==", "signed_at": "2026-08-06T15:00:00Z"}]
+  },
+  {
+    "name": "wrong key",
+    "layer": "trust",
+    "path": ["signatures", "1", "key_id"],
+    "value": "issuer-reviewer"
+  },
+  {
+    "name": "forged signature",
+    "layer": "trust",
+    "path": ["signatures", "0", "signature"],
+    "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+  },
+  {
+    "name": "signature transplanted to another record",
+    "layer": "trust",
+    "path": ["record_hash"],
+    "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "name": "wrong domain",
+    "layer": "trust",
+    "path": ["context", "domain"],
+    "value": "contrl.co/different"
+  },
+  {
+    "name": "policy substitution",
+    "layer": "trust",
+    "path": ["trust_policy", "hash"],
+    "value": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "name": "policy identifier substitution",
+    "layer": "trust",
+    "path": ["trust_policy", "id"],
+    "value": "example-only/weaker/v1"
+  },
+  {
+    "name": "signature time changed",
+    "layer": "trust",
+    "path": ["signatures", "0", "signed_at"],
+    "value": "2026-08-06T16:00:00Z"
+  },
+  {
+    "name": "unknown evaluator revision",
+    "layer": "decision",
+    "path": ["evaluation", "evaluator", "revision"],
+    "value": "git:0000000000000000000000000000000000000000"
+  },
+  {
+    "name": "wrong evaluator implementation",
+    "layer": "decision",
+    "path": ["evaluation", "evaluator", "id"],
+    "value": "unknown"
+  },
+  {
+    "name": "unsupported language edition",
+    "layer": "decision",
+    "path": ["rule", "edition"],
+    "value": "v2"
+  },
+  {
+    "name": "wrong recorded outcome",
+    "layer": "decision",
+    "path": ["evaluation", "outcome"],
+    "value": "DENIED"
+  },
+  {
+    "name": "incorrect trace",
+    "layer": "decision",
+    "path": ["evaluation", "trace", "authorized"],
+    "value": false
+  },
+  {
+    "name": "wrong canonical text",
+    "layer": "decision",
+    "path": ["rule", "canonical_text"],
+    "value": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n"
+  }
+]

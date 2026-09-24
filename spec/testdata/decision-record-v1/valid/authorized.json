@@ -1,0 +1,146 @@
+{
+  "context": {
+    "correlation_id": "01989f7e-7b80-7000-8000-000000000002",
+    "domain": "contrl.co/example",
+    "subject": "example:record:1"
+  },
+  "created_at": "2026-08-06T15:00:00Z",
+  "evaluation": {
+    "at": "2026-08-06T15:00:00Z",
+    "evaluator": {
+      "id": "github.com/contrl-co/crl",
+      "revision": "git:43f49dcbfc49fe7e3381fad4b37814b95d2d8a34"
+    },
+    "facts": {
+      "approved": true,
+      "observed_at.approved": "2026-08-06T14:00:00Z",
+      "provider.registry": true
+    },
+    "outcome": "AUTHORIZED",
+    "provenance": [
+      {
+        "fact": "approved",
+        "observed_at": "2026-08-06T14:00:00Z",
+        "source": "/evidence/registry.json",
+        "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3",
+        "supplier": "example-registry"
+      },
+      {
+        "fact": "provider.registry",
+        "observed_at": "2026-08-06T14:00:00Z",
+        "source": "/evidence/registry.json",
+        "source_digest": "8e141b8f24e0551f74b214d3a2be8374d6b25289b95a32f6f47fecc7441236f3",
+        "supplier": "example-registry"
+      }
+    ],
+    "trace": {
+      "aspect": "example.record",
+      "authorized": true,
+      "checks": [
+        {
+          "actual": true,
+          "expected": true,
+          "field": "approved",
+          "kind": "need",
+          "operator": "==",
+          "passed": true,
+          "rule_name": "allow",
+          "scope": "rule"
+        },
+        {
+          "actual": true,
+          "expected": true,
+          "field": "quorum",
+          "kind": "quorum",
+          "operator": "==",
+          "passed": true,
+          "providers": [
+            {
+              "present": true,
+              "provider": "registry"
+            }
+          ],
+          "quorum_expression": "registry",
+          "rule_name": "allow",
+          "scope": "rule"
+        }
+      ],
+      "result": "AUTHORIZED",
+      "rules": [
+        {
+          "aspect": "example.record",
+          "authorized": true,
+          "checks": [
+            {
+              "actual": true,
+              "expected": true,
+              "field": "approved",
+              "kind": "need",
+              "operator": "==",
+              "passed": true,
+              "rule_name": "allow",
+              "scope": "rule"
+            },
+            {
+              "actual": true,
+              "expected": true,
+              "field": "quorum",
+              "kind": "quorum",
+              "operator": "==",
+              "passed": true,
+              "providers": [
+                {
+                  "present": true,
+                  "provider": "registry"
+                }
+              ],
+              "quorum_expression": "registry",
+              "rule_name": "allow",
+              "scope": "rule"
+            }
+          ],
+          "result": "AUTHORIZED",
+          "rule_name": "allow"
+        }
+      ]
+    },
+    "trace_hash": "0721b1dee1bbfdc4b816df4ed62588bc204bd996e8599bfe5909d1fc4d418fdc"
+  },
+  "extensions": {
+    "contrl.co/workflow": {
+      "number": 1.50,
+      "purpose": "conformance-only"
+    }
+  },
+  "record_hash": "4488df6cdf9feaefe1f609c1550610b6dbbb26e91d66da90d267aa7c80567d0b",
+  "record_id": "01989f7e-7b80-7000-8000-000000000001",
+  "rule": {
+    "bundle_hash": "f2b9cb4b12f279bc27139b8e1c5c431cb36ef2a2c66d342fdc55ac63a4c747aa",
+    "canonical_bundle": "{\"name\":\"example.record\",\"package\":\"example\",\"rules\":[{\"collectors\":[{\"connector_kind\":\"api\",\"name\":\"registry\",\"provider_type\":\"registry\",\"signals\":[{\"expiry\":{\"literal\":\"30d\",\"mode\":\"ttl\",\"seconds\":2592000},\"kind\":\"bool\",\"name\":\"approved\",\"source_field\":\"approved\"}],\"source\":\"/evidence/registry.json\"}],\"name\":\"allow\",\"predicates\":[{\"field\":\"approved\",\"kind\":\"need\",\"operator\":\"==\",\"value\":{\"bool\":true,\"kind\":\"bool\"}},{\"expression\":{\"kind\":\"subject\",\"name\":\"registry\"},\"field\":\"quorum\",\"kind\":\"quorum\",\"operator\":\"==\",\"value\":{\"bool\":true,\"kind\":\"bool\"}}],\"target\":\"example.record\"}],\"version\":\"crl/v1\"}",
+    "canonical_text": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry",
+    "edition": "v1",
+    "source": "crl v1\npackage example\nbundle example.record\n\nrule allow\n\ttarget example.record\n\tcollector registry registry api from /evidence/registry.json\n\t\tsignal approved bool from approved ttl 30d\n\tneed approved == true\n\tquorum registry\n",
+    "source_hash": "b9fe00a72b027735ab86ec07581bbc97e4f10f9e8fd448c4cda15b7dc1c5d569"
+  },
+  "schema_version": "crl-decision-record/v1",
+  "signatures": [
+    {
+      "algorithm": "ed25519",
+      "key_id": "issuer-2026-01",
+      "role": "issuer",
+      "signature": "IaemrnD29NjHDQ/baGWAXNreXsrh/AuaQL8qf2humsWxTeUCO8DKX7P65KLNssmc8DOSyifZqasc3Wmd4WTcBQ==",
+      "signed_at": "2026-08-06T15:00:00Z"
+    },
+    {
+      "algorithm": "ed25519",
+      "key_id": "reviewer-2026-01",
+      "role": "reviewer",
+      "signature": "m4CNwXCoP1uY58vs1P/UiWNGOIc0NbBOi/9P2CELg1p8zHv9qzydB6HbBFQnil3B0MVnQRhpeYT8XUoP6cTWCg==",
+      "signed_at": "2026-08-06T15:00:00Z"
+    }
+  ],
+  "trust_policy": {
+    "hash": "14cee99fdb47a64b354641efce6e08f6609aeb9866a4134bc447f7d6d772ae86",
+    "id": "example-only/two-parties/v1"
+  }
+}

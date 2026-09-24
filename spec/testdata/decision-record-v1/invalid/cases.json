@@ -1,0 +1,113 @@
+[
+  {
+    "name": "unsupported record version",
+    "path": ["schema_version"],
+    "value": "crl-decision-record/v2"
+  },
+  {
+    "name": "unknown top-level field",
+    "path": ["unexpected"],
+    "value": true
+  },
+  {
+    "name": "unknown nested field",
+    "path": ["evaluation", "unexpected"],
+    "value": true
+  },
+  {
+    "name": "non-UTC evaluation instant",
+    "path": ["evaluation", "at"],
+    "value": "2026-08-06T11:00:00-04:00"
+  },
+  {
+    "name": "impossible calendar date",
+    "path": ["created_at"],
+    "value": "2026-02-31T15:00:00Z"
+  },
+  {
+    "name": "non-canonical fractional seconds",
+    "path": ["created_at"],
+    "value": "2026-08-06T15:00:00.100Z"
+  },
+  {
+    "name": "excess timestamp precision",
+    "path": ["created_at"],
+    "value": "2026-08-06T15:00:00.1234567890Z"
+  },
+  {
+    "name": "unsafe numeric fact",
+    "path": ["evaluation", "facts", "approved"],
+    "value": 9007199254740992
+  },
+  {
+    "name": "unsafe negative numeric fact",
+    "path": ["evaluation", "facts", "approved"],
+    "value": -9007199254740992
+  },
+  {
+    "name": "structured fact value",
+    "path": ["evaluation", "facts", "approved"],
+    "value": {"nested": true}
+  },
+  {
+    "name": "unsupported outcome",
+    "path": ["evaluation", "outcome"],
+    "value": "ALLOW"
+  },
+  {
+    "name": "malformed source hash",
+    "path": ["rule", "source_hash"],
+    "value": "sha256:not-hex"
+  },
+  {
+    "name": "malformed record identifier",
+    "path": ["record_id"],
+    "value": "not-a-uuid"
+  },
+  {
+    "name": "invalid canonical bundle JSON",
+    "path": ["rule", "canonical_bundle"],
+    "value": "{not-json}"
+  },
+  {
+    "name": "unknown trace check kind",
+    "path": ["evaluation", "trace", "checks", "0", "kind"],
+    "value": "invented"
+  },
+  {
+    "name": "unknown trace operator",
+    "path": ["evaluation", "trace", "checks", "0", "operator"],
+    "value": "contains"
+  },
+  {
+    "name": "unknown trace scope",
+    "path": ["evaluation", "trace", "checks", "0", "scope"],
+    "value": "project"
+  },
+  {
+    "name": "unsupported signature algorithm",
+    "path": ["signatures"],
+    "value": [
+      {
+        "algorithm": "rsa-pss",
+        "key_id": "issuer-2026-01",
+        "role": "issuer",
+        "signed_at": "2026-08-06T15:00:00Z",
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+      }
+    ]
+  },
+  {
+    "name": "non-canonical signature padding bits",
+    "path": ["signatures"],
+    "value": [
+      {
+        "algorithm": "ed25519",
+        "key_id": "issuer-2026-01",
+        "role": "issuer",
+        "signed_at": "2026-08-06T15:00:00Z",
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB=="
+      }
+    ]
+  }
+]
