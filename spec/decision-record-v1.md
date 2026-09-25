@@ -237,6 +237,19 @@ number tokens can emit a different trace from a CLI that decodes facts through
 floating point. A verifier must reject that mismatch, never normalize the
 recorded trace to make it pass.
 
+`NewUnsigned` constructs a record from a complete `decisionrecord.Input`,
+computing hashes and ordering provenance. IDs, timestamps, context, source
+provenance, evaluator identity and policy reference must be supplied explicitly.
+Construction validates the contract but does not recompile or approve those
+assertions. The resulting record is unsigned and fails trust.
+
+`Record.Sign` returns a new record using an explicit role, key ID, signing time
+and Ed25519 `crypto.Signer`, including a managed-key implementation. It validates
+identity fields before requesting a signature, rejects duplicate identities,
+and checks the returned signature mathematically. It does not validate existing
+signatures, approve signer authority, or treat multiple keys/roles as independent
+parties. Neither API automatically issues records from platform events.
+
 `schema_version` is exact. A v1 verifier must reject any other value; it must
 not guess or downgrade. New required behavior needs a new record version.
 `rule.edition` identifies the language independently of the record format;
