@@ -219,6 +219,24 @@ Neither method approves a trust policy, counts independent parties, checks key
 revocation, replays a pinned evaluator or permits an action. A caller must not
 present success from these methods as trusted decision verification.
 
+`VerifyRecomputation` accepts a caller-selected local `EvaluatorArtifact`
+and a cancellation context. It uses the edition-v1 CLI protocol. For a
+`sha256:` revision it copies and hashes
+the executable, then runs those exact bytes in a private temporary directory.
+It recompiles the embedded source and compares all five compilation-envelope
+fields, then evaluates the exact fact tokens at the recorded time and compares
+the complete public trace and outcome. Missing artifacts, other revision forms
+and mismatches refuse; there is no download or fallback to a current compiler.
+Private input files are removed on success and failure.
+
+Recomputation alone does not approve an artifact, a policy, required extensions
+or action authority. Consumers must still apply the verification order above.
+The CLI continues to refuse overall verification while those layers are absent.
+Implementation identity includes its entrypoint: a public API using exact
+number tokens can emit a different trace from a CLI that decodes facts through
+floating point. A verifier must reject that mismatch, never normalize the
+recorded trace to make it pass.
+
 `schema_version` is exact. A v1 verifier must reject any other value; it must
 not guess or downgrade. New required behavior needs a new record version.
 `rule.edition` identifies the language independently of the record format;
