@@ -211,6 +211,14 @@ in addition to strict parsing; other consumers must perform equivalent checks.
 
 ## Compatibility and extensions
 
+The Go `decisionrecord` package implements strict parsing, provenance coverage,
+content-digest verification and Ed25519 signature mathematics for this contract.
+`Parse` returns an immutable record; `Bytes` returns a copy of its canonical
+wire bytes. `VerifyIntegrity` and `VerifySignatureMath` are separate checks.
+Neither method approves a trust policy, counts independent parties, checks key
+revocation, replays a pinned evaluator or permits an action. A caller must not
+present success from these methods as trusted decision verification.
+
 `schema_version` is exact. A v1 verifier must reject any other value; it must
 not guess or downgrade. New required behavior needs a new record version.
 `rule.edition` identifies the language independently of the record format;

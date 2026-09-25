@@ -1,4 +1,4 @@
-// crlc is the CRL toolchain: lint, compile, fmt, eval, and graph in
+// crlc is the CRL toolchain: lint, compile, fmt, eval, graph, and verify in
 // one binary.
 //
 //	crlc lint    [-format text|json] [-fail-on error|warning|info|none] [-canonical] [-quiet] [path ...]
@@ -6,6 +6,7 @@
 //	crlc fmt     [path] | crlc fmt -w path ...
 //	crlc eval    -facts facts.json [-at rfc3339] [-format text|json] [-require-authorized] [path]
 //	crlc graph   [path]
+//	crlc verify  [-format text|json] [-public-key key_id=hex ...] [path]
 //	crlc version
 //
 // Every command reads stdin when no path is given (or when the path is
@@ -85,6 +86,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runEval(rest, stdin, stdout, stderr)
 	case "graph":
 		return runGraph(rest, stdin, stdout, stderr)
+	case "verify":
+		return runVerify(rest, stdin, stdout, stderr)
 	case "version":
 		if _, err := fmt.Fprintf(stdout, "crlc %s (editions: %s)\n", version, crl.EditionV1); err != nil {
 			return 1
@@ -115,6 +118,7 @@ commands:
   fmt       print (or rewrite) the canonical form
   eval      evaluate a bundle against facts
   graph     emit the deterministic rule graph as JSON
+  verify    check portable record layers; refuse incomplete verification
   version   print toolchain version and supported editions
 
 Commands read stdin when no path is given. Run a command with -h for
