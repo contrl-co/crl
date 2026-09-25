@@ -1,6 +1,7 @@
 # crlc — the CRL toolchain
 
-One binary: lint, compile, format, evaluate, and graph CRL source.
+One binary: lint, compile, format, evaluate, and graph CRL source,
+and check portable decision records.
 
 ```text
 crlc <command> [flags] [path ...]
@@ -105,6 +106,29 @@ Emits the bundle's deterministic node/edge graph and a computed layout
 as JSON, plus the bundle hash. The same source always produces the
 same graph, node identities included — the graph is a projection of
 the compiled bundle, not a second source of truth.
+
+## crlc verify
+
+```text
+crlc verify [-format text|json] [-public-key key_id=hex ...] [record.json]
+```
+
+Checks a portable decision record against the accepted v1 contract. Reports
+structure, content integrity, signature mathematics, trust, decision correctness
+and replay context separately. It stops checking at the first failed layer.
+Public keys are repeatable `key_id=hex` arguments containing exactly 32 bytes
+in hexadecimal. Duplicate key identifiers are refused. These public keys are
+inputs to signature mathematics; supplying them does not approve a trust policy
+or establish independent parties. Without keys, signature mathematics remains
+unverified.
+
+**This command currently exits 1 for every record.** Approved trust-policy
+verification, pinned evaluator replay and replay/context policy are not yet
+implemented. Even matching hashes and signatures cannot establish a verified
+decision. JSON output therefore always contains `"verified": false`, with
+those layers marked `unverified`. Malformed records and tampering mark the
+applicable layer `failed`; usage or input errors exit 2. Do not use successful
+individual checks as permission to act.
 
 ## crlc version
 
