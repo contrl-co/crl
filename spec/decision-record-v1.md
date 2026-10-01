@@ -227,6 +227,9 @@ It recompiles the embedded source and compares all five compilation-envelope
 fields, then evaluates the exact fact tokens at the recorded time and compares
 the complete public trace and outcome. Missing artifacts, other revision forms
 and mismatches refuse; there is no download or fallback to a current compiler.
+Each evaluator process receives an empty environment. Compilation and evaluation
+stdout are limited to 32 MiB per invocation; exceeding the limit terminates the
+process and refuses recomputation. Evaluator diagnostics are not returned.
 Private input files are removed on success and failure.
 
 Recomputation alone does not approve an artifact, a policy, required extensions

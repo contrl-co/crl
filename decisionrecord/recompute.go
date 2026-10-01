@@ -16,6 +16,23 @@ import (
 
 var ErrRecomputation = errors.New("decision record: recomputation failed")
 
+const evaluatorOutputLimit = 32 << 20
+
+type evaluatorOutput struct {
+	buffer   bytes.Buffer
+	cancel   context.CancelFunc
+	exceeded bool
+}
+
+func (output *evaluatorOutput) Write(data []byte) (int, error) {
+	if len(data) > evaluatorOutputLimit-output.buffer.Len() {
+		output.exceeded = true
+		output.cancel()
+		return 0, fmt.Errorf("%w: evaluator output exceeds 32 MiB", ErrRecomputation)
+	}
+	return output.buffer.Write(data)
+}
+
 // EvaluatorArtifact identifies a local crlc executable selected by the caller.
 // Neither field is a resolver: record content never selects a path or download.
 // The caller must approve this implementation and artifact for its intended use.
@@ -67,15 +84,24 @@ func (record *Record) VerifyRecomputation(ctx context.Context, artifact Evaluato
 		return fmt.Errorf("%w: copy selected evaluator: %v", ErrRecomputation, err)
 	}
 	run := func(arguments ...string) ([]byte, error) {
-		command := exec.CommandContext(ctx, program, arguments...)
+		processContext, cancel := context.WithCancel(ctx)
+		defer cancel()
+		command := exec.CommandContext(processContext, program, arguments...)
 		command.Dir = directory
+		// Approved evaluator bytes must not receive the verifier's credentials.
+		command.Env = []string{}
 		command.Stdin = strings.NewReader(rule["source"].(string))
-		output, err := command.Output()
+		output := &evaluatorOutput{cancel: cancel}
+		command.Stdout = output
+		err := command.Run()
+		if output.exceeded {
+			return nil, fmt.Errorf("%w: evaluator output exceeds 32 MiB", ErrRecomputation)
+		}
 		if err != nil {
 			// Compiler diagnostics may contain private source or fact values.
 			return nil, fmt.Errorf("%w: evaluator command failed: %v", ErrRecomputation, err)
 		}
-		return output, nil
+		return output.buffer.Bytes(), nil
 	}
 	compiled, err := run("compile", "-edition", rule["edition"].(string), "-format", "proto", "-")
 	if err != nil {
