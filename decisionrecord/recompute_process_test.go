@@ -17,7 +17,7 @@ import (
 	"github.com/contrl-co/crl/internal/pbenvelope"
 )
 
-func evaluatorProcessFixture(test *testing.T, overflowCommand string) (*decisionrecord.Record, decisionrecord.EvaluatorArtifact) {
+func evaluatorProcessFixture(test *testing.T, overflowCommand, expectedWorkDir string) (*decisionrecord.Record, decisionrecord.EvaluatorArtifact) {
 	test.Helper()
 	var document map[string]any
 	decode(test, fixture(test, "valid/authorized.json"), &document)
@@ -33,16 +33,21 @@ func evaluatorProcessFixture(test *testing.T, overflowCommand string) (*decision
 	}
 	directory := test.TempDir()
 	source := fmt.Sprintf(`package main
-import ("os"; "bytes")
+import ("os"; "bytes"; "path/filepath"; "strings")
 func main() {
     if os.Getenv("CRL_VERIFIER_SECRET_CANARY") != "" { os.Exit(17) }
+    if %q != "" {
+        executable, err := os.Executable()
+        relative, relativeErr := filepath.Rel(%q, executable)
+        if err != nil || relativeErr != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) { os.Exit(18) }
+    }
     if os.Args[1] == %q {
         block := bytes.Repeat([]byte("x"), 65536)
         for count := 0; count < 513; count++ { if _, err := os.Stdout.Write(block); err != nil { return } }
         return
     }
     if os.Args[1] == "compile" { os.Stdout.Write([]byte(%q)) } else { os.Stdout.Write([]byte(%q)) }
-}`, overflowCommand, compiled, trace)
+}`, expectedWorkDir, expectedWorkDir, overflowCommand, compiled, trace)
 	sourcePath := filepath.Join(directory, "main.go")
 	if err := os.WriteFile(sourcePath, []byte(source), 0600); err != nil {
 		test.Fatal(err)
@@ -65,7 +70,7 @@ func main() {
 }
 
 func TestEvaluatorDoesNotInheritVerifierEnvironment(test *testing.T) {
-	record, artifact := evaluatorProcessFixture(test, "")
+	record, artifact := evaluatorProcessFixture(test, "", "")
 	test.Setenv("CRL_VERIFIER_SECRET_CANARY", "must-not-reach-the-evaluator")
 	if err := record.VerifyRecomputation(test.Context(), artifact); err != nil {
 		test.Fatalf("evaluator received the verifier canary or otherwise failed: %v", err)
@@ -75,7 +80,7 @@ func TestEvaluatorDoesNotInheritVerifierEnvironment(test *testing.T) {
 func TestEvaluatorRefusesOutputOver32MiB(test *testing.T) {
 	for _, command := range []string{"compile", "eval"} {
 		test.Run(command, func(test *testing.T) {
-			record, artifact := evaluatorProcessFixture(test, command)
+			record, artifact := evaluatorProcessFixture(test, command, "")
 			ctx, cancel := context.WithTimeout(test.Context(), 5*time.Second)
 			defer cancel()
 			err := record.VerifyRecomputation(ctx, artifact)
@@ -86,5 +91,19 @@ func TestEvaluatorRefusesOutputOver32MiB(test *testing.T) {
 				test.Fatal("output refusal waited for the caller's timeout")
 			}
 		})
+	}
+}
+
+func TestEvaluatorUsesConfiguredWorkDirWhenDefaultTempIsUnavailable(test *testing.T) {
+	workDirectory := test.TempDir()
+	record, artifact := evaluatorProcessFixture(test, "", workDirectory)
+	artifact.WorkDir = workDirectory
+	notDirectory := filepath.Join(test.TempDir(), "not-a-directory")
+	if err := os.WriteFile(notDirectory, []byte("file"), 0600); err != nil {
+		test.Fatal(err)
+	}
+	test.Setenv("TMPDIR", notDirectory)
+	if err := record.VerifyRecomputation(test.Context(), artifact); err != nil {
+		test.Fatalf("evaluator did not run from the configured private work directory: %v", err)
 	}
 }

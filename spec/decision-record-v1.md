@@ -223,6 +223,9 @@ present success from these methods as trusted decision verification.
 and a cancellation context. It uses the edition-v1 CLI protocol. For a
 `sha256:` revision it copies and hashes
 the executable, then runs those exact bytes in a private temporary directory.
+`EvaluatorArtifact.WorkDir` optionally selects the parent directory for that
+private directory when the system temporary filesystem does not permit
+execution; the record itself never selects this path.
 It recompiles the embedded source and compares all five compilation-envelope
 fields, then evaluates the exact fact tokens at the recorded time and compares
 the complete public trace and outcome. Missing artifacts, other revision forms

@@ -34,11 +34,14 @@ func (output *evaluatorOutput) Write(data []byte) (int, error) {
 }
 
 // EvaluatorArtifact identifies a local crlc executable selected by the caller.
-// Neither field is a resolver: record content never selects a path or download.
-// The caller must approve this implementation and artifact for its intended use.
+// WorkDir optionally selects the parent directory for private execution files,
+// which can be needed when the system temporary directory disallows execution.
+// Record content never selects an artifact or directory; the caller must approve
+// this implementation and artifact for its intended use.
 type EvaluatorArtifact struct {
-	ID   string
-	Path string
+	ID      string
+	Path    string
+	WorkDir string
 }
 
 // VerifyRecomputation checks that an artifact pinned by SHA-256 reproduces the
@@ -68,7 +71,7 @@ func (record *Record) VerifyRecomputation(ctx context.Context, artifact Evaluato
 	if "sha256:"+crlcrypto.DigestBytes(executable) != revision {
 		return fmt.Errorf("%w: evaluator artifact digest mismatch", ErrRecomputation)
 	}
-	directory, err := os.MkdirTemp("", "crl-recompute-")
+	directory, err := os.MkdirTemp(artifact.WorkDir, "crl-recompute-")
 	if err != nil {
 		return fmt.Errorf("%w: private working directory: %v", ErrRecomputation, err)
 	}
