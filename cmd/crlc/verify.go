@@ -110,6 +110,10 @@ func checkRecord(body []byte, keys map[string]ed25519.PublicKey) recordVerificat
 		return report
 	}
 	report.Integrity = verificationLayer{Status: "passed"}
+	if !record.HasSignatures() {
+		report.SignatureMath = verificationLayer{Status: "unverified", Detail: "record has no signatures"}
+		return report
+	}
 	if len(keys) == 0 {
 		report.SignatureMath = verificationLayer{Status: "unverified", Detail: "no public keys supplied"}
 		return report

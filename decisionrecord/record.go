@@ -70,12 +70,22 @@ func (record *Record) Bytes() []byte {
 	return bytes.Clone(record.canonical)
 }
 
+// HasSignatures reports whether the record contains any signature envelopes.
+// It does not validate signatures or establish authority.
+func (record *Record) HasSignatures() bool {
+	return record != nil && record.document != nil && len(record.document["signatures"].([]any)) > 0
+}
+
 func (record *Record) object(name string) map[string]any {
 	return record.document[name].(map[string]any)
 }
 
 func (record *Record) validateCoverage() error {
 	evaluation := record.object("evaluation")
+	trace := evaluation["trace"].(map[string]any)
+	if evaluation["outcome"] != trace["result"] {
+		return fmt.Errorf("%w: evaluation outcome does not match trace result", ErrStructure)
+	}
 	facts := evaluation["facts"].(map[string]any)
 	provenance := map[string]string{}
 	previous := ""
