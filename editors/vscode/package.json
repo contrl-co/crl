@@ -117,5 +117,9 @@
   ],
   "devDependencies": {
     "@vscode/vsce": "3.2.1"
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign@2.0.9": true,
+    "keytar@7.9.0": true
   }
 }
