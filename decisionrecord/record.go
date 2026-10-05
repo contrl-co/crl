@@ -86,6 +86,9 @@ func (record *Record) validateCoverage() error {
 	if evaluation["outcome"] != trace["result"] {
 		return fmt.Errorf("%w: evaluation outcome does not match trace result", ErrStructure)
 	}
+	if trace["authorized"] != (trace["result"] == "AUTHORIZED") {
+		return fmt.Errorf("%w: trace authorized flag does not match trace result", ErrStructure)
+	}
 	facts := evaluation["facts"].(map[string]any)
 	provenance := map[string]string{}
 	previous := ""

@@ -85,3 +85,29 @@ func TestObservationMetadataRequiresProvenanceForItsBase(test *testing.T) {
 		})
 	}
 }
+
+func TestTraceAuthorizedMustMatchResult(test *testing.T) {
+	for _, scenario := range []struct {
+		name       string
+		outcome    string
+		authorized bool
+	}{
+		{"authorized result with authorized false", "AUTHORIZED", false},
+		{"denied result with authorized true", "DENIED", true},
+	} {
+		test.Run(scenario.name, func(test *testing.T) {
+			var document map[string]any
+			decode(test, fixture(test, "valid/authorized.json"), &document)
+			evaluation := document["evaluation"].(map[string]any)
+			trace := evaluation["trace"].(map[string]any)
+			evaluation["outcome"], trace["result"], trace["authorized"] = scenario.outcome, scenario.outcome, scenario.authorized
+			body, err := json.Marshal(document)
+			if err != nil {
+				test.Fatal(err)
+			}
+			if _, err := decisionrecord.Parse(body); !errors.Is(err, decisionrecord.ErrStructure) {
+				test.Fatalf("trace authorized flag disagreeing with result accepted: %v", err)
+			}
+		})
+	}
+}
