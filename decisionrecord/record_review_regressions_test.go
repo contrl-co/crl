@@ -61,3 +61,27 @@ func TestEveryFactRequiresItsOwnProvenance(test *testing.T) {
 		})
 	}
 }
+
+func TestObservationMetadataRequiresProvenanceForItsBase(test *testing.T) {
+	for _, scenario := range []struct {
+		name, fact string
+		value      any
+	}{
+		{"metadata of metadata with empty value", "observed_at.observed_at.approved", ""},
+		{"metadata of metadata with a timestamp", "observed_at.observed_at.approved", "2026-08-06T14:00:00Z"},
+	} {
+		test.Run(scenario.name, func(test *testing.T) {
+			var document map[string]any
+			decode(test, fixture(test, "valid/authorized.json"), &document)
+			facts := document["evaluation"].(map[string]any)["facts"].(map[string]any)
+			facts[scenario.fact] = scenario.value
+			body, err := json.Marshal(document)
+			if err != nil {
+				test.Fatal(err)
+			}
+			if _, err := decisionrecord.Parse(body); !errors.Is(err, decisionrecord.ErrStructure) {
+				test.Fatalf("fact without provenance accepted through observation metadata: %v", err)
+			}
+		})
+	}
+}

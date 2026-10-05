@@ -102,7 +102,7 @@ func (record *Record) validateCoverage() error {
 	}
 	for name, value := range facts {
 		if base, metadata := strings.CutPrefix(name, "observed_at."); metadata {
-			if _, exists := facts[base]; !exists || provenance[base] != value {
+			if observed, exists := provenance[base]; !exists || observed != value {
 				return fmt.Errorf("%w: observation metadata mismatch", ErrStructure)
 			}
 		} else if _, exists := provenance[name]; !exists {
